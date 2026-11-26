@@ -1,7 +1,6 @@
 #pragma once
 
 #include "lucid/gpu/graphics_backend.hpp"
-#include "lucid/gpu/software_backend.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -11,9 +10,10 @@
 
 namespace lucid::gpu {
 
-// Optional off-screen Vulkan device integration. The renderer exposes the
-// same geometry/texture API on every platform; hardware rasterization is
-// reported only by builds that include the native Vulkan graphics pipeline.
+// Native Vulkan renderer. When the Vulkan SDK and glslc are available this
+// class owns the graphics pipeline, GPU buffers, sampled images, off-screen
+// color/depth targets, readback, and (with SDL2) an optional Vulkan swapchain.
+// Builds without those optional tools keep the portable software renderer.
 class VulkanBackend final : public GraphicsBackend {
 public:
     VulkanBackend();
@@ -25,8 +25,17 @@ public:
     VulkanBackend& operator=(VulkanBackend&&) noexcept;
 
     [[nodiscard]] static bool compiled_with_vulkan() noexcept;
+    [[nodiscard]] static bool compiled_with_native_pipeline() noexcept;
+    [[nodiscard]] static bool compiled_with_vulkan_window() noexcept;
 
     [[nodiscard]] bool initialize(std::string* error = nullptr) override;
+    [[nodiscard]] bool initialize_window(std::string_view title,
+                                         std::uint32_t width,
+                                         std::uint32_t height,
+                                         std::string* error = nullptr);
+    [[nodiscard]] void poll_window_events() noexcept;
+    [[nodiscard]] bool window_open() const noexcept;
+
     [[nodiscard]] bool begin_frame(std::uint32_t width, std::uint32_t height,
                                    std::string* error = nullptr) override;
     [[nodiscard]] bool clear(std::uint32_t rgba,
@@ -56,8 +65,6 @@ public:
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
-    SoftwareBackend reference_renderer_{};
-    bool initialized_{};
 };
 
 } // namespace lucid::gpu

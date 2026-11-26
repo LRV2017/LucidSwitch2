@@ -6,15 +6,17 @@ LucidSwitch2 is an early clean-room emulator research project. Its host-side cor
 
 ## Layers
 
-- Application shell (src/main.cpp): command-line help, version, self-test, graphics demo, LXP package creation/inspection, and bounded synthetic program execution.
+- Application shell (src/main.cpp): command-line help, version, self-test, graphics demos, LXP package creation/inspection, and bounded synthetic program execution.
 - Homebrew package layer (lucid::homebrew): strict LXP v1 serialization, CRC-32 verification, segment bounds and file-size validation, and file I/O.
 - Core session (lucid::core::Emulator): initializes guest memory, loads caller-supplied bytes, runs the CPU for a bounded instruction budget, supports resume/stop, and reports CPU faults.
 - Memory bus (lucid::core::MemoryBus): checked host-side regions with read, write, and execute permissions.
 - CPU interpreter (lucid::cpu::A64Interpreter): selected A64 instructions for synthetic programs, including translation-aware fetch/load/store and selected MRS/MSR encodings; see a64-subset.md.
 - CPU memory facade (lucid::cpu::CpuMemory): virtual-to-physical translation and access-permission enforcement using either the standalone AddressSpace map or the stage-1 MMU.
 - Stage-1 MMU (lucid::mmu::Stage1Mmu): bounded 4 KiB / 48-bit TTBR0 descriptor walker with L1/L2 block support and a fixed-size software TLB.
-- Graphics contract (lucid::gpu::GraphicsBackend): original host renderer boundary with a CPU reference rasterizer and an optional Vulkan image-upload backend; not console GPU emulation.
-- Desktop presenter (lucid::gpu::WindowPresenter): optional SDL2 preview for host framebuffer readbacks.
+- Graphics command path (lucid::gpu::GpuCommandProcessor): validates the original guest test packet format and dispatches to the shared GraphicsBackend contract.
+- Software graphics backend (lucid::gpu::SoftwareBackend): deterministic reference triangle rasterizer, depth testing, texture sampling, and readback.
+- Native graphics backend (lucid::gpu::VulkanBackend): Vulkan graphics pipeline, vertex/index buffers, sampled device-local texture images, color/depth render targets, shader execution, and readback; optional SDL2 swapchain presentation blits the completed GPU target to the acquired swapchain image.
+- Desktop software presenter (lucid::gpu::WindowPresenter): optional SDL2 preview for CPU reference framebuffer readbacks.
 
 ## Design constraints
 
@@ -26,6 +28,7 @@ LucidSwitch2 is an early clean-room emulator research project. Its host-side cor
 6. Add compatibility claims only with repeatable test evidence.
 7. Bound CPU execution and package sizes so test programs cannot run indefinitely or allocate unbounded memory inside the host application.
 8. Validate a complete package header, segment layout, and checksum before initializing a guest session.
+9. Keep the Vulkan backend optional and retain the software reference renderer for deterministic tests and systems without a shader compiler or physical Vulkan device.
 
 ## Current LXP execution flow
 
@@ -34,6 +37,15 @@ LucidSwitch2 is an early clean-room emulator research project. Its host-side cor
 3. The runner creates a synthetic guest memory range, copies code and initialized data, relies on zero-filled guest RAM for BSS, and initializes the stack pointer.
 4. The A64 interpreter runs at most the user-selected instruction budget (default 100,000; CLI maximum 10,000,000).
 5. Budget exhaustion pauses the session. Unsupported instructions and memory faults are surfaced as CPU faults; no guest syscalls or operating-system services are emulated.
+
+## Graphics execution flow
+
+1. The caller initializes the software or Vulkan graphics backend.
+2. begin_frame creates/resizes the off-screen RGBA8 color and depth target and opens a render pass.
+3. Texture resources are uploaded and bound through descriptor sets. Indexed vertex/index buffers are supplied to the graphics pipeline.
+4. The Vulkan vertex shader converts pixel-space coordinates into clip space, passes packed vertex color and UV values, and the fragment shader samples a bound texture and modulates it by vertex color.
+5. Depth testing/writes occur in the fixed native pipeline. The render target is transitioned for readback and copied to a host-visible buffer; the optional SDL2 window path blits the GPU image into a Vulkan swapchain and presents it.
+6. The current Vulkan path waits synchronously for queue completion. A software renderer remains the portability and deterministic reference implementation.
 
 ## Synthetic CPU execution flow
 
@@ -47,4 +59,4 @@ The instruction budget is a host safety mechanism, not a guest timing model.
 
 ## Next engineering milestone
 
-Build a proper decoder/test corpus and add broader, specification-backed A64 coverage. Continue to document system-register, exception, MMU, memory-ordering, and device behavior before console-specific work.
+Expand specification-backed A64 coverage and build a larger reproducible CPU test corpus. Continue documenting system-register, exception, MMU, memory-ordering, and device behavior before console-specific work.

@@ -18,7 +18,7 @@
 #include <vector>
 
 namespace {
-constexpr const char* kVersion = "0.10.0";
+constexpr const char* kVersion = "0.11.0";
 constexpr std::uint64_t kDemoBase = 0x1000U;
 constexpr std::uint64_t kDemoInstructionBudget = 16U;
 constexpr std::uint64_t kDefaultHomebrewBudget = 100000U;
@@ -37,7 +37,7 @@ void print_help() {
         << "  lucidswitch2 --self-test  Run memory and CPU smoke checks\n"
         << "  lucidswitch2 --run        Execute a bounded synthetic A64 demo\n"
         << "  lucidswitch2 --gpu-info   Check optional Vulkan device support\n"
-        << "  lucidswitch2 --graphics-demo [--window]  Render an original test scene\n"
+        << "  lucidswitch2 --graphics-demo [--window] [--vulkan]  Render an original test scene\n"
         << "  lucidswitch2 --create-homebrew-sample <output.lxp>\n"
         << "  lucidswitch2 --inspect-homebrew <program.lxp>\n"
         << "  lucidswitch2 --run-homebrew <program.lxp> [instruction-budget]\n\n"
@@ -54,52 +54,84 @@ bool parse_instruction_budget(const char* text, std::uint64_t& budget) {
 }
 
 int run_gpu_info() {
-    lucid::gpu::VulkanBackend backend;
-    if (!lucid::gpu::VulkanBackend::compiled_with_vulkan()) {
-        std::cout << "Vulkan SDK: not detected at configure time\n"
-                  << "Hardware rasterization: not implemented\n"
-                  << "Software indexed renderer: available\n"
-                  << "SDL2 window presenter: "
-                  << (lucid::gpu::WindowPresenter::compiled_with_sdl2()
-                        ? "available" : "not compiled") << "\n"
-                  << "Install the Vulkan SDK and reconfigure to enable optional off-screen uploads.\n";
+    using lucid::gpu::VulkanBackend;
+    if (!VulkanBackend::compiled_with_native_pipeline()) {
+        const auto capabilities = VulkanBackend{}.capabilities();
+        std::cout << "Vulkan SDK: "
+                  << (VulkanBackend::compiled_with_vulkan() ? "available" : "not detected")
+                  << "\n"
+                  << "Native shader pipeline: not compiled\n"
+                  << "Software reference renderer: available\n"
+                  << capabilities.description << "\n";
         return 0;
     }
 
+    VulkanBackend backend;
     std::string error;
     if (!backend.initialize(&error)) {
-        std::cerr << "Vulkan initialization failed: " << error << "\n";
+        std::cerr << "Native Vulkan initialization failed: " << error << "\n";
         return 1;
     }
-
     const auto capabilities = backend.capabilities();
-    std::cout << "Vulkan device: " << backend.name() << "\n"
-              << "Off-screen GPU image upload: "
-              << (capabilities.offscreen_gpu_upload ? "available" : "unavailable") << "\n"
-              << "Hardware rasterization: "
-              << (capabilities.hardware_rasterization ? "available" : "not implemented") << "\n"
-              << "Indexed geometry and textures: "
+    std::cout << "Vulkan SDK: available\n"
+              << "Selected Vulkan device: " << backend.name() << "\n"
+              << "Native shader pipeline: available\n"
+              << "GPU indexed geometry and textures: "
               << (capabilities.indexed_geometry && capabilities.textures_and_samplers
-                    ? "available through the reference renderer" : "unavailable") << "\n"
-              << "SDL2 window presenter: "
-              << (lucid::gpu::WindowPresenter::compiled_with_sdl2()
-                    ? "available" : "not compiled") << "\n";
+                    ? "available" : "unavailable") << "\n"
+              << "Hardware-class device: "
+              << (capabilities.hardware_rasterization
+                    ? "discrete/integrated GPU" : "software or other Vulkan device") << "\n"
+              << "Vulkan swapchain presentation: "
+              << (VulkanBackend::compiled_with_vulkan_window()
+                    ? "compiled (requires a compatible desktop surface)" : "not compiled")
+              << "\n"
+              << capabilities.description << "\n";
     return 0;
 }
 
-int run_graphics_demo(const bool use_window) {
+int render_scene(lucid::gpu::GraphicsBackend& renderer,
+                 std::vector<std::uint32_t>& pixels,
+                 std::string& error) {
     using namespace lucid::gpu;
-    SoftwareBackend renderer;
-    std::string error;
-    if (!renderer.initialize(&error) ||
-        !renderer.begin_frame(320U, 180U, &error) ||
+    if (!renderer.begin_frame(320U, 180U, &error) ||
         !renderer.clear(0x0B1020FFU, &error) ||
         !renderer.clear_depth(1.0F, &error)) {
-        std::cerr << "Graphics demo setup failed: " << error << "\n";
         return 1;
     }
 
-    constexpr std::array<std::uint32_t, 4> texels{
+    const std::array<GraphicsVertex, 4U> vertices{{
+        {48.0F, 28.0F, 0.35F, 0xFFFFFFFFU, 0.0F, 0.0F},
+        {272.0F, 28.0F, 0.35F, 0xFFFFFFFFU, 4.0F, 0.0F},
+        {272.0F, 152.0F, 0.35F, 0xFFFFFFFFU, 4.0F, 3.0F},
+        {48.0F, 152.0F, 0.35F, 0xFFFFFFFFU, 0.0F, 3.0F}
+    }};
+    constexpr std::array<std::uint32_t, 6U> indices{
+        0U, 1U, 2U, 0U, 2U, 3U
+    };
+    if (!renderer.draw_indexed(vertices, indices, 1U, &error) ||
+        !renderer.present_frame(&error)) return 1;
+
+    if (!pixels.empty() && !renderer.readback(pixels, &error)) return 1;
+    return 0;
+}
+
+int run_native_graphics_demo(const bool use_window) {
+    using namespace lucid::gpu;
+    VulkanBackend renderer;
+    std::string error;
+    const bool use_vulkan_window =
+        use_window && VulkanBackend::compiled_with_vulkan_window();
+    const bool initialized = use_vulkan_window
+        ? renderer.initialize_window("LucidSwitch2 Native Vulkan Demo",
+                                     960U, 540U, &error)
+        : renderer.initialize(&error);
+    if (!initialized) {
+        std::cerr << "Native Vulkan setup failed: " << error << "\n";
+        return 1;
+    }
+
+    constexpr std::array<std::uint32_t, 4U> texels{
         0x26D7FFFFU, 0xFF4FA3FFU, 0x7A5CFFFFU, 0x42E6B9FFU
     };
     const SamplerDesc sampler{
@@ -107,51 +139,98 @@ int run_graphics_demo(const bool use_window) {
         TextureAddress::Repeat, TextureAddress::Repeat
     };
     if (!renderer.create_texture(1U, 2U, 2U, texels, sampler, &error)) {
-        std::cerr << "Texture setup failed: " << error << "\n";
+        std::cerr << "Native Vulkan texture setup failed: " << error << "\n";
         return 1;
     }
 
-    const std::array<GraphicsVertex, 4> vertices{{
-        {48.0F, 28.0F, 0.35F, 0xFFFFFFFFU, 0.0F, 0.0F},
-        {272.0F, 28.0F, 0.35F, 0xFFFFFFFFU, 4.0F, 0.0F},
-        {272.0F, 152.0F, 0.35F, 0xFFFFFFFFU, 4.0F, 3.0F},
-        {48.0F, 152.0F, 0.35F, 0xFFFFFFFFU, 0.0F, 3.0F}
-    }};
-    constexpr std::array<std::uint32_t, 6> indices{0U, 1U, 2U, 0U, 2U, 3U};
-    if (!renderer.draw_indexed(vertices, indices, 1U, &error) ||
-        !renderer.present_frame(&error)) {
-        std::cerr << "Graphics demo rendering failed: " << error << "\n";
+    std::vector<std::uint32_t> pixels(use_vulkan_window ? 0U : 320U * 180U);
+    if (use_vulkan_window) {
+        while (renderer.window_open()) {
+            renderer.poll_window_events();
+            if (!renderer.window_open()) break;
+            if (render_scene(renderer, pixels, error) != 0) {
+                std::cerr << "Native Vulkan frame failed: " << error << "\n";
+                return 1;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(16));
+        }
+    } else {
+        if (render_scene(renderer, pixels, error) != 0) {
+            std::cerr << "Native Vulkan rendering failed: " << error << "\n";
+            return 1;
+        }
+        std::cout << "[PASS] native Vulkan vertex shader and triangle-list input\n"
+                  << "[PASS] GPU vertex and index buffers\n"
+                  << "[PASS] GPU texture image, sampler, and fragment shader\n"
+                  << "[PASS] depth-tested Vulkan render pass\n"
+                  << "[PASS] GPU framebuffer readback\n"
+                  << "Vulkan device: " << renderer.name() << "\n";
+    }
+    (void)renderer.destroy_texture(1U, &error);
+    return 0;
+}
+
+int run_software_graphics_demo(const bool use_window) {
+    using namespace lucid::gpu;
+    SoftwareBackend renderer;
+    std::string error;
+    if (!renderer.initialize(&error)) {
+        std::cerr << "Software graphics setup failed: " << error << "\n";
         return 1;
     }
-
+    constexpr std::array<std::uint32_t, 4U> texels{
+        0x26D7FFFFU, 0xFF4FA3FFU, 0x7A5CFFFFU, 0x42E6B9FFU
+    };
+    const SamplerDesc sampler{
+        TextureFilter::Nearest, TextureFilter::Nearest,
+        TextureAddress::Repeat, TextureAddress::Repeat
+    };
+    if (!renderer.create_texture(1U, 2U, 2U, texels, sampler, &error)) {
+        std::cerr << "Software texture setup failed: " << error << "\n";
+        return 1;
+    }
     std::vector<std::uint32_t> pixels(320U * 180U);
-    if (!renderer.readback(pixels, &error)) {
-        std::cerr << "Graphics demo readback failed: " << error << "\n";
+    if (render_scene(renderer, pixels, error) != 0) {
+        std::cerr << "Software graphics rendering failed: " << error << "\n";
         return 1;
     }
-    std::cout << "[PASS] RGBA8 color and depth framebuffer\n"
-              << "[PASS] indexed vertex and index buffers\n"
-              << "[PASS] sampled 2x2 texture with repeat sampler\n"
-              << "[PASS] software triangle rasterization and framebuffer readback\n";
-
-    if (!use_window) {
-        std::cout << "Rendered a 320x180 original test scene. Use --window to open the desktop preview.\n";
-        return 0;
-    }
+    std::cout << "[PASS] CPU reference triangle rasterization\n"
+              << "[PASS] textured framebuffer readback\n";
+    if (!use_window) return 0;
 
     WindowPresenter window;
-    if (!window.initialize("LucidSwitch2 Graphics Demo", 960U, 540U, &error)) {
-        std::cerr << "Window preview unavailable: " << error << "\n";
+    if (!window.initialize("LucidSwitch2 Software Graphics Preview",
+                           960U, 540U, &error)) {
+        std::cerr << "Software window preview unavailable: " << error << "\n";
         return 1;
     }
     while (!window.should_close()) {
         if (!window.present(pixels, 320U, 180U, &error)) {
-            std::cerr << "Window presentation failed: " << error << "\n";
+            std::cerr << "Software window presentation failed: " << error << "\n";
             return 1;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
     return 0;
+}
+
+int run_graphics_demo(const bool use_window, const bool force_vulkan) {
+    using lucid::gpu::VulkanBackend;
+    if (VulkanBackend::compiled_with_native_pipeline()) {
+        if (use_window && !VulkanBackend::compiled_with_vulkan_window()) {
+            if (force_vulkan) {
+                std::cerr << "Vulkan swapchain support was not compiled; install SDL2 and rebuild.\n";
+                return 1;
+            }
+            return run_software_graphics_demo(true);
+        }
+        return run_native_graphics_demo(use_window);
+    }
+    if (force_vulkan) {
+        std::cerr << "Native Vulkan rendering is unavailable. Install the Vulkan SDK and glslc, then reconfigure.\n";
+        return 1;
+    }
+    return run_software_graphics_demo(use_window);
 }
 
 int run_synthetic_demo(const bool self_test) {
@@ -323,8 +402,20 @@ int main(int argc, char* argv[]) {
     if (command == "--self-test") return run_synthetic_demo(true);
     if (command == "--run") return run_synthetic_demo(false);
     if (command == "--gpu-info") return run_gpu_info();
-    if (command == "--graphics-demo")
-        return run_graphics_demo(argc >= 3 && std::string(argv[2]) == "--window");
+    if (command == "--graphics-demo") {
+        bool use_window = false;
+        bool force_vulkan = false;
+        for (int index = 2; index < argc; ++index) {
+            const std::string option = argv[index];
+            if (option == "--window") use_window = true;
+            else if (option == "--vulkan") force_vulkan = true;
+            else {
+                std::cerr << "Unknown graphics-demo option: " << option << "\n";
+                return 2;
+            }
+        }
+        return run_graphics_demo(use_window, force_vulkan);
+    }
     if (command == "--create-homebrew-sample") {
         if (argc != 3) {
             std::cerr << "Usage: --create-homebrew-sample <output.lxp>\n";

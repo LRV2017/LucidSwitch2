@@ -19,14 +19,40 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Install native Vulkan test dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libvulkan-dev mesa-vulkan-drivers glslc libsdl2-dev
+
+      - name: Configure with the required Linux Vulkan pipeline
+        if: runner.os == 'Linux'
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DLUCID_REQUIRE_NATIVE_VULKAN=ON
+
+      - name: Configure portable build
+        if: runner.os != 'Linux'
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DLUCID_ENABLE_VULKAN=OFF -DLUCID_ENABLE_SDL2=OFF
 
       - name: Build
         run: cmake --build build --config Release --parallel
 
-      - name: Test
-        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Test (including lavapipe native Vulkan rendering)
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ] && [ -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json ]; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          ctest --test-dir build -C Release --output-on-failure
+        shell: bash
+
+      - name: Run native Vulkan graphics demo
+        if: runner.os == 'Linux'
+        run: |
+          if [ -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json ]; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          ./build/lucidswitch2 --gpu-info
+          ./build/lucidswitch2 --graphics-demo --vulkan
+        shell: bash
 
       - name: Run foundation self-test
         run: |

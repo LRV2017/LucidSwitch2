@@ -44,6 +44,7 @@ struct GraphicsCapabilities {
     bool textures_and_samplers{};
     bool window_presentation{};
     std::string_view description{};
+    bool native_shader_pipeline{};
 };
 
 // A frame is an off-screen RGBA8 color attachment plus a depth attachment.

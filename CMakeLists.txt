@@ -1,13 +1,14 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(LucidSwitch2 VERSION 0.10.0
+project(LucidSwitch2 VERSION 0.11.0
     DESCRIPTION "Clean-room console emulation research scaffold"
     LANGUAGES CXX
 )
 
 option(LUCID_BUILD_TESTS "Build the LucidSwitch2 test suite" ON)
-option(LUCID_ENABLE_VULKAN "Enable the optional Vulkan device upload backend when the SDK is available" ON)
-option(LUCID_ENABLE_SDL2 "Enable the optional SDL2 desktop frame presenter when available" ON)
+option(LUCID_ENABLE_VULKAN "Enable the optional Vulkan backend when the SDK is available" ON)
+option(LUCID_ENABLE_SDL2 "Enable the optional SDL2 desktop presenter when available" ON)
+option(LUCID_REQUIRE_NATIVE_VULKAN "Fail configuration unless Vulkan and glslc can build the native renderer" OFF)
 
 if(LUCID_ENABLE_VULKAN)
     find_package(Vulkan QUIET)
@@ -15,6 +16,9 @@ endif()
 if(LUCID_ENABLE_SDL2)
     find_package(SDL2 QUIET)
 endif()
+
+set(LUCID_HAS_VULKAN_VALUE 0)
+set(LUCID_HAS_VULKAN_PIPELINE_VALUE 0)
 
 add_library(lucid_core
     src/core/memory_bus.cpp
@@ -40,13 +44,56 @@ target_include_directories(lucid_core PUBLIC
 target_compile_features(lucid_core PUBLIC cxx_std_20)
 
 if(LUCID_ENABLE_VULKAN AND Vulkan_FOUND)
+    set(LUCID_HAS_VULKAN_VALUE 1)
     target_link_libraries(lucid_core PRIVATE Vulkan::Vulkan)
-    target_compile_definitions(lucid_core PRIVATE LUCID_HAS_VULKAN=1)
-    message(STATUS "LucidSwitch2: Vulkan SDK detected; optional off-screen upload backend enabled")
+    find_program(LUCID_GLSLC
+        NAMES glslc
+        HINTS "$ENV{VULKAN_SDK}/Bin" "$ENV{VULKAN_SDK}/Bin32")
+    if(LUCID_GLSLC)
+        set(LUCID_HAS_VULKAN_PIPELINE_VALUE 1)
+        set(LUCID_SHADER_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/shaders")
+        file(MAKE_DIRECTORY "${LUCID_SHADER_OUTPUT_DIR}")
+        add_custom_command(
+            OUTPUT "${LUCID_SHADER_OUTPUT_DIR}/lucid.vert.spv"
+            COMMAND "${LUCID_GLSLC}" --target-env=vulkan1.0
+                    -fshader-stage=vert
+                    "${CMAKE_CURRENT_SOURCE_DIR}/shaders/lucid.vert"
+                    -o "${LUCID_SHADER_OUTPUT_DIR}/lucid.vert.spv"
+            DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/lucid.vert"
+            VERBATIM
+        )
+        add_custom_command(
+            OUTPUT "${LUCID_SHADER_OUTPUT_DIR}/lucid.frag.spv"
+            COMMAND "${LUCID_GLSLC}" --target-env=vulkan1.0
+                    -fshader-stage=frag
+                    "${CMAKE_CURRENT_SOURCE_DIR}/shaders/lucid.frag"
+                    -o "${LUCID_SHADER_OUTPUT_DIR}/lucid.frag.spv"
+            DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/lucid.frag"
+            VERBATIM
+        )
+        add_custom_target(lucid_shaders ALL
+            DEPENDS
+                "${LUCID_SHADER_OUTPUT_DIR}/lucid.vert.spv"
+                "${LUCID_SHADER_OUTPUT_DIR}/lucid.frag.spv")
+        add_dependencies(lucid_core lucid_shaders)
+        target_compile_definitions(lucid_core PRIVATE
+            LUCID_SHADER_DIR=\"${LUCID_SHADER_OUTPUT_DIR}\")
+        message(STATUS "LucidSwitch2: native Vulkan shader pipeline enabled with ${LUCID_GLSLC}")
+    else()
+        message(WARNING "LucidSwitch2: Vulkan SDK found, but glslc was not found; native pipeline disabled")
+    endif()
 else()
-    target_compile_definitions(lucid_core PRIVATE LUCID_HAS_VULKAN=0)
-    message(STATUS "LucidSwitch2: Vulkan SDK not found; software renderer remains available")
+    message(STATUS "LucidSwitch2: Vulkan SDK not found or disabled; software renderer remains available")
 endif()
+
+if(LUCID_REQUIRE_NATIVE_VULKAN AND
+   (NOT LUCID_HAS_VULKAN_VALUE OR NOT LUCID_HAS_VULKAN_PIPELINE_VALUE))
+    message(FATAL_ERROR "LUCID_REQUIRE_NATIVE_VULKAN is ON but Vulkan SDK plus glslc were not found.")
+endif()
+
+target_compile_definitions(lucid_core PRIVATE
+    LUCID_HAS_VULKAN=${LUCID_HAS_VULKAN_VALUE}
+    LUCID_HAS_VULKAN_PIPELINE=${LUCID_HAS_VULKAN_PIPELINE_VALUE})
 
 if(LUCID_ENABLE_SDL2 AND SDL2_FOUND)
     if(TARGET SDL2::SDL2)
@@ -58,10 +105,10 @@ if(LUCID_ENABLE_SDL2 AND SDL2_FOUND)
         target_link_libraries(lucid_core PRIVATE ${SDL2_LIBRARIES})
     endif()
     target_compile_definitions(lucid_core PRIVATE LUCID_HAS_SDL2=1)
-    message(STATUS "LucidSwitch2: SDL2 detected; optional desktop frame presenter enabled")
+    message(STATUS "LucidSwitch2: SDL2 desktop presenter enabled")
 else()
     target_compile_definitions(lucid_core PRIVATE LUCID_HAS_SDL2=0)
-    message(STATUS "LucidSwitch2: SDL2 not found; headless rendering remains available")
+    message(STATUS "LucidSwitch2: SDL2 not found; desktop presentation unavailable")
 endif()
 
 if(MSVC)

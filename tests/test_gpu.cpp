@@ -287,15 +287,87 @@ void test_window_presenter_configuration() {
 }
 
 void test_vulkan_build_configuration() {
-    const auto capabilities = lucid::gpu::VulkanBackend{}.capabilities();
-    if (lucid::gpu::VulkanBackend::compiled_with_vulkan()) {
+    using lucid::gpu::VulkanBackend;
+    const auto capabilities = VulkanBackend{}.capabilities();
+    if (VulkanBackend::compiled_with_native_pipeline()) {
+        expect(capabilities.native_shader_pipeline,
+               "native Vulkan build advertises the shader pipeline");
+        expect(capabilities.indexed_geometry && capabilities.textures_and_samplers,
+               "native Vulkan build advertises GPU geometry and texture support");
+    } else {
+        expect(!capabilities.native_shader_pipeline,
+               "portable build reports that native Vulkan shaders are unavailable");
+    }
+    if (VulkanBackend::compiled_with_native_pipeline()) {
         expect(capabilities.offscreen_gpu_upload,
-               "Vulkan-enabled build advertises off-screen GPU upload");
+               "native Vulkan build advertises off-screen GPU rendering");
     } else {
         expect(!capabilities.offscreen_gpu_upload,
-               "build without Vulkan SDK reports unavailable GPU upload");
+               "build without compiled shaders reports unavailable native GPU rendering");
     }
 }
+
+void test_native_vulkan_rendering() {
+    using namespace lucid::gpu;
+    if (!VulkanBackend::compiled_with_native_pipeline()) return;
+
+    VulkanBackend renderer;
+    std::string error;
+    const bool initialized = renderer.initialize(&error);
+    expect(initialized, "initialize native Vulkan renderer and select a graphics device");
+    if (!initialized) {
+        std::cerr << "[VULKAN] " << error << "\n";
+        return;
+    }
+
+    const std::array<std::uint32_t, 1U> blue_texel{0x0000FFFFU};
+    const SamplerDesc sampler{
+        TextureFilter::Nearest, TextureFilter::Nearest,
+        TextureAddress::Clamp, TextureAddress::Clamp
+    };
+    expect(renderer.create_texture(31U, 1U, 1U, blue_texel, sampler, &error),
+           "upload a sampled texture image to Vulkan device memory");
+
+    expect(renderer.begin_frame(8U, 8U, &error),
+           "begin native Vulkan color/depth render pass");
+    expect(renderer.clear(0x101010FFU, &error) &&
+           renderer.clear_depth(1.0F, &error),
+           "clear native Vulkan color and depth attachments");
+
+    const std::array<GraphicsVertex, 4U> blue_quad{{
+        {1.0F, 1.0F, 0.2F, 0xFFFFFFFFU, 0.5F, 0.5F},
+        {7.0F, 1.0F, 0.2F, 0xFFFFFFFFU, 0.5F, 0.5F},
+        {7.0F, 7.0F, 0.2F, 0xFFFFFFFFU, 0.5F, 0.5F},
+        {1.0F, 7.0F, 0.2F, 0xFFFFFFFFU, 0.5F, 0.5F}
+    }};
+    constexpr std::array<std::uint32_t, 6U> quad_indices{
+        0U, 1U, 2U, 0U, 2U, 3U
+    };
+    expect(renderer.draw_indexed(blue_quad, quad_indices, 31U, &error),
+           "submit indexed GPU geometry with a sampled texture");
+
+    auto occluded_red_quad = blue_quad;
+    for (auto& vertex : occluded_red_quad) {
+        vertex.z = 0.8F;
+        vertex.rgba = 0xFF0000FFU;
+    }
+    expect(renderer.draw_indexed(occluded_red_quad, quad_indices, 0U, &error),
+           "submit farther untextured geometry for Vulkan depth testing");
+    expect(renderer.present_frame(&error),
+           "execute Vulkan command buffer and publish the rendered image");
+
+    std::array<std::uint32_t, 64U> pixels{};
+    expect(renderer.readback(pixels, &error),
+           "read back the completed native Vulkan framebuffer");
+    expect(pixels[4U * 8U + 4U] == 0x0000FFFFU,
+           "GPU fragment shader samples blue texture and depth rejects farther red quad");
+    expect(pixels[0] == 0x101010FFU,
+           "native Vulkan readback preserves clear color outside the geometry");
+
+    expect(renderer.destroy_texture(31U, &error),
+           "release native Vulkan texture, sampler, and descriptor resources");
+}
+
 } // namespace
 
 int main() {
@@ -306,6 +378,7 @@ int main() {
     test_guest_indexed_command_stream();
     test_window_presenter_configuration();
     test_vulkan_build_configuration();
+    test_native_vulkan_rendering();
 
     if (failures != 0) {
         std::cerr << failures << " GPU test(s) failed.\n";
