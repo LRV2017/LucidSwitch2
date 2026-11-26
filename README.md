@@ -2,7 +2,7 @@
 
 An experimental, clean-room emulator research project focused on building a lawful foundation for studying modern console software and hardware interfaces.
 
-> **Status: early development scaffold.** LucidSwitch2 does not currently emulate Nintendo Switch 2 hardware, load commercial Switch 2 games, or provide playable compatibility. The CPU, GPU, system-service, and console-software interfaces are intentionally explicit placeholders until independently implemented and validated.
+> **Status: early development.** LucidSwitch2 includes a small A64 interpreter for synthetic test programs, but it does not currently emulate Nintendo Switch 2 hardware, load commercial Switch 2 games, or provide playable compatibility. CPU, GPU, memory-map, system-service, and console-software compatibility remain incomplete.
 
 ## Project principles
 
@@ -12,17 +12,16 @@ An experimental, clean-room emulator research project focused on building a lawf
 - **Small, testable steps:** each subsystem should have isolated tests and documented evidence before compatibility is claimed.
 - **No compatibility claims without proof:** a feature is not considered supported just because an interface exists.
 
-## What exists today
+## Current implementation
 
-The first milestone is a portable C++20 foundation:
+- C++20 / CMake project foundation.
+- Checked host-side memory bus.
+- Emulator lifecycle model.
+- **A64 interpreter subset:** NOP, MOVZ, MOVK, ADD/SUB immediate, B, CBZ/CBNZ, BR, RET.
+- Synthetic instruction tests.
+- Cross-platform GitHub Actions CI.
 
-- checked memory-bus mapping and bounds handling;
-- emulator lifecycle/state model;
-- CPU and graphics backend contracts;
-- a small command-line shell with a self-test mode;
-- unit tests that do not require console firmware or game files.
-
-These pieces are infrastructure, **not a functioning console emulator**.
+The interpreter is an educational milestone, **not a complete ARMv8-A CPU**. See [A64 subset limitations](docs/a64-subset.md).
 
 ## Build
 
@@ -50,25 +49,17 @@ ctest --test-dir build --output-on-failure
 
 ## Roadmap
 
-1. **Foundation (current):** build system, tests, memory primitives, lifecycle, subsystem contracts.
-2. **Architecture research:** document publicly observable hardware requirements and define testable interfaces without relying on leaked or proprietary material.
-3. **CPU research:** independently implement and validate the required instruction-set behavior against public specifications and synthetic tests.
+1. **Foundation:** build system, tests, memory primitives, lifecycle, subsystem contracts.
+2. **CPU research:** expand the A64 interpreter with flags, register arithmetic, memory operations, and public-specification-based tests.
+3. **Architecture research:** document publicly observable hardware requirements and define testable interfaces.
 4. **Memory and system services:** add documented abstractions with deterministic tests.
 5. **Graphics research:** design a backend around public graphics standards, then validate with original test scenes.
 6. **Homebrew test environment:** define a documented, original test format and sample programs that contain no proprietary code or assets.
 7. **Compatibility work:** only after the above, test legally obtained user-provided software and publish reproducible results.
 
-Roadmap order may change as reliable public technical information becomes available.
-
 ## Contributing
 
-Please open an issue before a large change. Include:
-- the subsystem being changed;
-- the public specification or original test supporting the change;
-- build and test commands;
-- known limitations.
-
-Do not submit firmware, keys, game dumps, leaked SDKs, or proprietary source/assets.
+Please open an issue before a large change. Include the subsystem, public specification or original test, build/test commands, and known limitations. Do not submit firmware, keys, game dumps, leaked SDKs, or proprietary source/assets.
 
 ## Legal and naming
 

@@ -2,14 +2,14 @@
 
 ## Scope
 
-The current code is a host-side foundation for future research. It does not reproduce a console hardware architecture and does not execute console software.
+The current code is a host-side foundation plus a deliberately limited A64 instruction interpreter. It does not reproduce a console hardware architecture and does not execute console software.
 
 ## Layers
 
 - **Application shell** (`src/main.cpp`): command-line entry point and local self-test.
 - **Core session** (`lucid::core::Emulator`): lifecycle and execution-backend availability checks.
 - **Memory bus** (`lucid::core::MemoryBus`): checked host-side address-space regions for synthetic tests.
-- **CPU contract** (`lucid::cpu::CpuBackend`): future instruction execution boundary.
+- **CPU interpreter** (`lucid::cpu::A64Interpreter`): selected A64 instructions for synthetic programs; see [a64-subset.md](a64-subset.md).
 - **Graphics contract** (`lucid::gpu::GraphicsBackend`): future host rendering boundary.
 
 ## Design constraints
@@ -23,4 +23,4 @@ The current code is a host-side foundation for future research. It does not repr
 
 ## Next engineering milestone
 
-Before implementing a CPU backend, publish an architecture research note that identifies the public specifications relied upon, the execution mode being targeted, and a test plan based entirely on synthetic programs. Do not infer undocumented hardware details from guesses.
+Expand A64 coverage with flags, conditional branches, register arithmetic, and load/store instructions. Do not claim console compatibility from the existence of an instruction interpreter.
