@@ -21,6 +21,10 @@ public:
     static constexpr std::uint64_t DefaultTcr = TcrIps48Bit | TcrT0sz48Bit;
 
     explicit Stage1Mmu(core::MemoryBus& physical_memory) noexcept;
+    Stage1Mmu(const Stage1Mmu&) = delete;
+    Stage1Mmu& operator=(const Stage1Mmu&) = delete;
+    Stage1Mmu(Stage1Mmu&&) = delete;
+    Stage1Mmu& operator=(Stage1Mmu&&) = delete;
 
     [[nodiscard]] bool configure(std::uint64_t ttbr0_el1,
                                  std::uint64_t tcr_el1) noexcept;

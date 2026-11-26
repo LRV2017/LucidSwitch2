@@ -40,6 +40,11 @@ void set_error(std::string* error, const char* message) {
     const std::uint64_t guest_size, std::uint64_t& root_address,
     std::string* error) {
     constexpr std::uint64_t page_size = mmu::Stage1Mmu::PageSize;
+    if (guest_size == 0U ||
+        guest_size > std::numeric_limits<std::uint64_t>::max() - guest_base) {
+        set_error(error, "The guest memory range overflows.");
+        return false;
+    }
     const std::uint64_t last_address = guest_base + guest_size - 1U;
     if ((last_address >> 48U) != 0U) {
         set_error(error, "The initial stage-1 bootstrap supports lower 48-bit guest addresses only.");
@@ -49,17 +54,24 @@ void set_error(std::string* error, const char* message) {
     const std::uint64_t first_l0 = guest_base >> 39U;
     const std::uint64_t last_l0 = last_address >> 39U;
     const std::uint64_t l0_count = last_l0 - first_l0 + 1U;
-    if (guest_size > std::numeric_limits<std::uint64_t>::max() - guest_base ||
-        guest_base + guest_size > std::numeric_limits<std::uint64_t>::max() - (page_size - 1U)) {
-        set_error(error, "The stage-1 table allocation address overflows.");
+    const std::uint64_t first_block = guest_base >> 30U;
+    const std::uint64_t last_block = last_address >> 30U;
+    constexpr std::uint64_t max_block_index = (1ULL << 18U) - 1U;
+    std::uint64_t table_block = 0U;
+    if (last_block < max_block_index) {
+        table_block = max_block_index;
+    } else if (first_block > 0U) {
+        table_block = first_block - 1U;
+    } else {
+        set_error(error, "No unmapped 1 GiB physical block is available for the bootstrap page tables.");
         return false;
     }
-
-    const std::uint64_t table_base =
-        (guest_base + guest_size + page_size - 1U) & ~(page_size - 1U);
+    // Keep page-table backing outside every 1 GiB block identity-mapped for
+    // guest RAM, so guest loads/stores cannot accidentally reach the tables.
+    const std::uint64_t table_base = (table_block << 30U) + 0x10000U;
     const std::uint64_t table_bytes64 = (l0_count + 1U) * page_size;
-    if ((table_base >> 48U) != 0U) {
-        set_error(error, "The stage-1 page tables must fit in the supported 48-bit physical address range.");
+    if (table_bytes64 > (1ULL << 30U) - 0x10000U) {
+        set_error(error, "The stage-1 page tables do not fit in their reserved physical block.");
         return false;
     }
     if (table_bytes64 > static_cast<std::uint64_t>(
@@ -84,8 +96,6 @@ void set_error(std::string* error, const char* message) {
         }
     }
 
-    const std::uint64_t first_block = guest_base >> 30U;
-    const std::uint64_t last_block = last_address >> 30U;
     for (std::uint64_t block = first_block; block <= last_block; ++block) {
         const std::uint64_t l0 = block >> 9U;
         const std::uint64_t l1_index = block & 0x1FFU;
@@ -160,6 +170,17 @@ bool Emulator::load_program(std::uint64_t address,
     }
     if (bytes.empty()) {
         set_error(error, "The program image cannot be empty.");
+        return false;
+    }
+    if (address < config_.memory_base) {
+        set_error(error, "Program writes must stay inside the configured guest RAM.");
+        return false;
+    }
+    const std::uint64_t offset = address - config_.memory_base;
+    const std::uint64_t guest_size = static_cast<std::uint64_t>(config_.memory_size);
+    if (offset > guest_size ||
+        static_cast<std::uint64_t>(bytes.size()) > guest_size - offset) {
+        set_error(error, "Program writes must stay inside the configured guest RAM.");
         return false;
     }
     return memory_.write(address, bytes, error);

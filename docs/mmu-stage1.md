@@ -24,7 +24,7 @@ The software TLB stores up to 256 successful 4 KiB translations and their modele
 
 ## Emulator bootstrap
 
-Emulator::initialize() allocates an L0 root and the required L1 table pages after the configured guest RAM, fills L1 block descriptors for every 1 GiB span touched by that range, sets TTBR0_EL1 and TCR_EL1 in the modeled system-register bank, and configures Stage1Mmu. Physical MemoryBus mappings remain the final bounds check, so the broader 1 GiB block descriptor does not create backing memory where none was allocated.
+Emulator::initialize() allocates an L0 root and the required L1 table pages inside a reserved physical 1 GiB block that is not among the blocks identity-mapped for guest RAM. It fills L1 block descriptors for every 1 GiB span touched by guest RAM, sets TTBR0_EL1 and TCR_EL1 in the modeled system-register bank, and configures Stage1Mmu. Physical MemoryBus mappings remain the final bounds check, so the broader 1 GiB block descriptor does not create guest backing memory where none was allocated. Keeping the table storage outside mapped guest blocks also prevents the normal guest address map from exposing its own bootstrap tables.
 
 ## Not implemented
 

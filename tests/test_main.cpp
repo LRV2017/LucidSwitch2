@@ -78,6 +78,8 @@ void test_emulator_execution() {
     expect(emulator.load_program(base, loop, &error), "load synthetic A64 program");
     expect(!emulator.load_program(base + 0x2000U, loop, &error),
            "reject program writes outside guest memory");
+    expect(!emulator.load_program(emulator.stage1_mmu().ttbr0_el1(), loop, &error),
+           "reject writes to reserved stage-1 page tables");
     expect(emulator.run(7U) == RunResult::InstructionLimitReached,
            "execute until instruction budget is reached");
     expect(emulator.state() == SessionState::Paused, "budget exhaustion pauses");
