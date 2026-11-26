@@ -33,7 +33,7 @@ public:
                                          std::uint32_t width,
                                          std::uint32_t height,
                                          std::string* error = nullptr);
-    [[nodiscard]] void poll_window_events() noexcept;
+    void poll_window_events() noexcept;
     [[nodiscard]] bool window_open() const noexcept;
 
     [[nodiscard]] bool begin_frame(std::uint32_t width, std::uint32_t height,
