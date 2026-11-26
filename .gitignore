@@ -1,0 +1,16 @@
+/build/
+/cmake-build-*/
+/out/
+/bin/
+/obj/
+CMakeFiles/
+CMakeCache.txt
+CTestTestfile.cmake
+Testing/
+.vs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.user
+*.suo
