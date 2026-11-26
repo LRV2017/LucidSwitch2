@@ -679,6 +679,87 @@ int main() {
            !state.flags.carry && !state.flags.overflow,
            "SBCS updates negative, carry and overflow for a negative result");
 
+
+    // Initial Advanced SIMD/NEON integer vector operations.
+    constexpr std::uint64_t simd_base = 0x4000U;
+    lucid::core::MemoryBus simd_memory;
+    expect(simd_memory.map_region(simd_base, 0x100U),
+           "map isolated Advanced SIMD instruction memory");
+    write32(simd_memory, simd_base + 0x00U, 0x4E228420U); // ADD V0.16B,V1.16B,V2.16B
+    write32(simd_memory, simd_base + 0x04U, 0x6E658483U); // SUB V3.8H,V4.8H,V5.8H
+    write32(simd_memory, simd_base + 0x08U, 0x4EA884E6U); // ADD V6.4S,V7.4S,V8.4S
+    write32(simd_memory, simd_base + 0x0CU, 0x4EEB8549U); // ADD V9.2D,V10.2D,V11.2D
+    write32(simd_memory, simd_base + 0x10U, 0x4E2E1DACU); // AND V12.16B,V13.16B,V14.16B
+    write32(simd_memory, simd_base + 0x14U, 0x0EB11E0FU); // ORR V15.8B,V16.8B,V17.8B
+    write32(simd_memory, simd_base + 0x18U, 0x6E341E72U); // EOR V18.16B,V19.16B,V20.16B
+    write32(simd_memory, simd_base + 0x1CU, 0x0E3786D5U); // ADD V21.8B,V22.8B,V23.8B
+    write32(simd_memory, simd_base + 0x20U, 0x0EE28420U); // Reserved 1D arrangement (Q=0)
+
+    lucid::cpu::CpuContext simd_state{};
+    simd_state.program_counter = simd_base;
+    simd_state.v[1] = {0xFFFFFFFFFFFFFFFFULL, 0x0101010101010101ULL};
+    simd_state.v[2] = {0x0101010101010101ULL, 0x0101010101010101ULL};
+    simd_state.v[4] = {0x0001000100010001ULL, 0x0001000100010001ULL};
+    simd_state.v[5] = {0x0002000200020002ULL, 0x0002000200020002ULL};
+    simd_state.v[7] = {0x0000000100000002ULL, 0x0000000300000004ULL};
+    simd_state.v[8] = {0x0000000500000006ULL, 0x0000000700000008ULL};
+    simd_state.v[10] = {0xFFFFFFFFFFFFFFFFULL, 1ULL};
+    simd_state.v[11] = {1ULL, 2ULL};
+    simd_state.v[13] = {0xFFFF0000FFFF0000ULL, 0xAAAAAAAA55555555ULL};
+    simd_state.v[14] = {0x0F0F0F0F0F0F0F0FULL, 0xFF00FF00FF00FF00ULL};
+    simd_state.v[16] = {0x0F0F0F0F0F0F0F0FULL, 0x123456789ABCDEF0ULL};
+    simd_state.v[17] = {0xF0F0F0F0F0F0F0F0ULL, 0xFFFFFFFFFFFFFFFFULL};
+    simd_state.v[19] = {0xAAAAAAAAAAAAAAAAULL, 0x0123456789ABCDEFULL};
+    simd_state.v[20] = {0xFFFF0000FFFF0000ULL, 0x1111111111111111ULL};
+    simd_state.v[22] = {0xFF00FF00FF00FF00ULL, 0xFFFFFFFFFFFFFFFFULL};
+    simd_state.v[23] = {0x0101010101010101ULL, 0xFFFFFFFFFFFFFFFFULL};
+    simd_state.flags = {true, false, true, true};
+
+    lucid::cpu::A64Interpreter simd_cpu;
+    for (unsigned index = 0U; index < 8U; ++index) {
+        expect(simd_cpu.step(simd_state, simd_memory) ==
+                   lucid::cpu::StepResult::Executed,
+               "execute a supported Advanced SIMD vector instruction");
+    }
+    expect(simd_state.v[0].low == 0U &&
+           simd_state.v[0].high == 0x0202020202020202ULL,
+           "ADD vector wraps each byte lane independently across 128 bits");
+    expect(simd_state.v[3].low == 0xFFFFFFFFFFFFFFFFULL &&
+           simd_state.v[3].high == 0xFFFFFFFFFFFFFFFFULL,
+           "SUB vector wraps each halfword lane independently");
+    expect(simd_state.v[6].low == 0x0000000600000008ULL &&
+           simd_state.v[6].high == 0x0000000A0000000CULL,
+           "ADD vector computes independent 32-bit lanes");
+    expect(simd_state.v[9].low == 0U && simd_state.v[9].high == 3U,
+           "ADD vector supports two 64-bit lanes");
+    expect(simd_state.v[12].low == 0x0F0F00000F0F0000ULL &&
+           simd_state.v[12].high == 0xAA00AA0055005500ULL,
+           "AND vector combines both 64-bit halves");
+    expect(simd_state.v[15].low == 0xFFFFFFFFFFFFFFFFULL &&
+           simd_state.v[15].high == 0U,
+           "ORR 64-bit vector form clears the upper destination half");
+    expect(simd_state.v[18].low == 0x5555AAAA5555AAAAULL &&
+           simd_state.v[18].high == 0x1032547698BADCFEULL,
+           "EOR vector combines all 128 register bits");
+    expect(simd_state.v[21].low == 0x0100010001000100ULL &&
+           simd_state.v[21].high == 0U,
+           "ADD 64-bit vector form wraps lanes and clears upper bits");
+    expect(simd_state.flags.negative && !simd_state.flags.zero &&
+           simd_state.flags.carry && simd_state.flags.overflow,
+           "Advanced SIMD integer operations leave NZCV flags unchanged");
+
+    const auto simd_unsupported_pc = simd_state.program_counter;
+    const auto simd_unsupported_retired = simd_state.instructions_retired;
+    const auto simd_unsupported_destination = simd_state.v[0];
+    expect(simd_cpu.step(simd_state, simd_memory) ==
+               lucid::cpu::StepResult::UnsupportedInstruction,
+           "reject reserved 64-bit-only vector arrangement in Q=0 form");
+    expect(simd_state.program_counter == simd_unsupported_pc &&
+           simd_state.instructions_retired == simd_unsupported_retired &&
+           simd_state.v[0].low == simd_unsupported_destination.low &&
+           simd_state.v[0].high == simd_unsupported_destination.high,
+           "unsupported Advanced SIMD encoding leaves CPU state unchanged");
+
     if (failures != 0) {
         std::cerr << failures << " A64 test(s) failed.\n";
         return 1;

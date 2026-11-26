@@ -222,6 +222,80 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
 
     const std::uint64_t next_pc = context.program_counter + 4U;
 
+
+    // Initial Advanced SIMD integer operations. This bounded subset supports
+    // vector ADD/SUB for B/H/S/D lanes and vector AND/ORR/EOR at 64/128 bits.
+    if ((instruction & 0xBF20FC00U) == 0x0E208400U ||
+        (instruction & 0xBF20FC00U) == 0x2E208400U) {
+        const bool q = ((instruction >> 30U) & 1U) != 0U;
+        const bool subtract = (instruction & 0x20000000U) != 0U;
+        const unsigned size = (instruction >> 22U) & 0x3U;
+        if (size == 3U && !q) return StepResult::UnsupportedInstruction;
+
+        const unsigned destination = instruction & 0x1FU;
+        const unsigned left_index = (instruction >> 5U) & 0x1FU;
+        const unsigned right_index = (instruction >> 16U) & 0x1FU;
+        const unsigned element_bits = 8U << size;
+        const unsigned lanes_per_half = 64U / element_bits;
+        const unsigned datasize_bits = q ? 128U : 64U;
+        const unsigned element_count = datasize_bits / element_bits;
+        const std::uint64_t element_mask = element_bits == 64U
+            ? std::numeric_limits<std::uint64_t>::max()
+            : ((std::uint64_t{1} << element_bits) - 1U);
+        const SimdRegister left = context.v[left_index];
+        const SimdRegister right = context.v[right_index];
+        SimdRegister result{};
+
+        for (unsigned lane = 0U; lane < element_count; ++lane) {
+            const unsigned half = lane / lanes_per_half;
+            const unsigned shift = (lane % lanes_per_half) * element_bits;
+            const std::uint64_t left_word = half == 0U ? left.low : left.high;
+            const std::uint64_t right_word = half == 0U ? right.low : right.high;
+            const std::uint64_t a = (left_word >> shift) & element_mask;
+            const std::uint64_t b = (right_word >> shift) & element_mask;
+            const std::uint64_t value =
+                (subtract ? (a - b) : (a + b)) & element_mask;
+            std::uint64_t& result_word = half == 0U ? result.low : result.high;
+            result_word |= value << shift;
+        }
+
+        // A 64-bit SIMD destination write clears the upper 64 bits.
+        if (!q) result.high = 0U;
+        context.v[destination] = result;
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
+    // Bitwise vector AND, ORR and EOR. These operate on the selected 64-bit
+    // or 128-bit register width and do not alter the integer NZCV flags.
+    const std::uint32_t simd_logic_opcode = instruction & 0xBFE0FC00U;
+    if (simd_logic_opcode == 0x0E201C00U ||
+        simd_logic_opcode == 0x0EA01C00U ||
+        simd_logic_opcode == 0x2E201C00U) {
+        const bool q = ((instruction >> 30U) & 1U) != 0U;
+        const unsigned destination = instruction & 0x1FU;
+        const unsigned left_index = (instruction >> 5U) & 0x1FU;
+        const unsigned right_index = (instruction >> 16U) & 0x1FU;
+        const SimdRegister left = context.v[left_index];
+        const SimdRegister right = context.v[right_index];
+        SimdRegister result{};
+        if (simd_logic_opcode == 0x0E201C00U) {
+            result.low = left.low & right.low;
+            if (q) result.high = left.high & right.high;
+        } else if (simd_logic_opcode == 0x0EA01C00U) {
+            result.low = left.low | right.low;
+            if (q) result.high = left.high | right.high;
+        } else {
+            result.low = left.low ^ right.low;
+            if (q) result.high = left.high ^ right.high;
+        }
+        context.v[destination] = result;
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
     // SVC #imm16: take a synchronous exception to the EL1 vector table.
     if ((instruction & 0xFFE0001FU) == 0xD4000001U) {
         const auto source_el = context.system_registers.current_el();

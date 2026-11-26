@@ -78,17 +78,17 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 
 ## Phase 10 initial scalar floating-point support
 
-- The CPU context models 32 128-bit SIMD/FP registers, but only selected scalar S/D transfer and arithmetic instructions are implemented.
+- The CPU context models 32 128-bit SIMD/FP registers. It supports selected scalar S/D transfers/arithmetic and a small integer-vector subset (ADD/SUB and AND/ORR/EOR); this is not complete NEON.
 - FMOV is bit-preserving for the supported general-register and scalar FP lane transfers; full SIMD lane semantics are not modeled.
 - Scalar arithmetic uses host `float`/`double` operations. FPCR/FPSR, architectural rounding modes, exception flags and traps, flush-to-zero controls, and implementation-specific NaN behavior are not modeled.
-- No Advanced SIMD/NEON arithmetic, vector loads/stores, table lookups, saturating/halving operations, or vector crypto are implemented.
+- Advanced SIMD remains mostly unsupported: vector loads/stores, lane insert/extract, comparisons, shifts, permutations, saturation/halving, vector floating-point, table lookups, and crypto are not implemented.
 - The limited scalar FP support does not materially establish commercial title compatibility; the CPU core still lacks many common A64 integer instructions, atomics/exclusives, and target-specific architectural behavior.
 
 
 ## Phase 11 AArch64 scalar integer expansion
 
 - The interpreter adds MOVN, ADR/ADRP, logical immediates, CSEL/CSINC/CSINV/CSNEG, UDIV/SDIV, LSLV/LSRV/ASRV/RORV, MADD/MSUB, BL and BLR. This is still a small subset of ARMv8-A.
-- No Advanced SIMD/NEON vector instructions, atomic/exclusive memory operations, pointer authentication, broad load/store addressing modes, exception-syndrome completeness, or full system-register behavior are implemented.
+- Most Advanced SIMD/NEON vector instructions, atomic/exclusive memory operations, pointer authentication, broad load/store addressing modes, exception-syndrome completeness, and full system-register behavior remain unimplemented.
 - These additional instructions are CPU groundwork; there is still no general NRO/NSO process loader, Horizon ABI, service manager, guest GPU, or commercial-game launch path.
 
 

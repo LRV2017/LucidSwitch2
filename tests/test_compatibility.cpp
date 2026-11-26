@@ -57,8 +57,8 @@ void test_compatibility_reports() {
            "report missing Horizon system services");
     expect(original_text.find("[partial] CPU / Scalar S/D floating-point and FMOV") != std::string::npos,
            "report the initial scalar floating-point subset as partial");
-    expect(original_text.find("[not implemented] CPU / Advanced SIMD/NEON vector execution") != std::string::npos,
-           "keep Advanced SIMD/NEON explicitly unsupported");
+    expect(original_text.find("[partial] CPU / Advanced SIMD/NEON vector execution") != std::string::npos,
+           "report the initial integer-vector NEON subset as partial");
     expect(original_text.find("[metadata-only] Container / NSP/PFS0 directory inspection") != std::string::npos,
            "report NSP package directory inspection as metadata-only");
     expect(original_text.find("[partial] Executable / Restricted plaintext NRO homebrew execution") != std::string::npos,
