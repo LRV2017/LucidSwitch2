@@ -20,16 +20,6 @@ void set_error(std::string* error, const char* message) {
     if (error != nullptr) *error = message;
 }
 
-std::uint32_t read_u32(const std::span<const std::uint8_t> bytes,
-                       const std::size_t offset) noexcept {
-    std::uint32_t value = 0U;
-    for (std::size_t index = 0U; index < 4U; ++index) {
-        value |= static_cast<std::uint32_t>(bytes[offset + index]) <<
-                 (index * 8U);
-    }
-    return value;
-}
-
 std::int64_t sign_extend_26(const std::uint32_t value) noexcept {
     const std::uint32_t immediate = value & 0x03FFFFFFU;
     if ((immediate & 0x02000000U) != 0U) {
@@ -73,8 +63,7 @@ bool load_file(const std::filesystem::path& path,
     return true;
 }
 
-bool get_entry_offset(const std::span<const std::uint8_t> bytes,
-                      const ExecutableInfo& info,
+bool get_entry_offset(const ExecutableInfo& info,
                       std::uint64_t& entry_offset,
                       std::string* error) {
     if (info.format != ExecutableFormat::Nro0) {
@@ -190,7 +179,7 @@ bool run_restricted_nro_homebrew(
     }
 
     std::uint64_t entry_offset = 0U;
-    if (!get_entry_offset(bytes, info, entry_offset, error)) return false;
+    if (!get_entry_offset(info, entry_offset, error)) return false;
 
     std::uint64_t guest_size = 0U;
     if (!calculate_guest_size(info, guest_size, error)) return false;

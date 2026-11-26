@@ -83,7 +83,7 @@ void test_restricted_nro_execution() {
     const bool loaded = run_restricted_nro_homebrew(path, 12U, report, &error);
     expect(loaded, "load and execute a bounded, relocation-free NRO test image");
     if (loaded) {
-        expect(report.run_result == core::RunResult::InstructionLimitReached,
+        expect(report.run_result == lucid::core::RunResult::InstructionLimitReached,
                "stop at the requested instruction budget");
         expect(report.instructions_retired == 12U,
                "retire exactly the requested number of A64 instructions");
@@ -101,6 +101,7 @@ void test_restricted_nro_execution() {
 
 void test_reject_unsupported_profiles() {
     using namespace lucid::switchfmt;
+    std::error_code ignored;
     const auto path = std::filesystem::temp_directory_path() /
                       "lucidswitch2-restricted-homebrew-invalid.nro";
     auto bytes = make_nro();
