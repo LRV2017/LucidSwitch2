@@ -30,7 +30,7 @@ constexpr HardwareProfile kSwitch2{
     "Nintendo confirms custom NVIDIA processor; T239-level detail is community reverse-engineered"
 };
 
-constexpr std::array<CompatibilityFeature, 13U> kCommonFeatures{{
+constexpr std::array<CompatibilityFeature, 14U> kCommonFeatures{{
     {"CPU", "AArch64 scalar integer interpreter", ImplementationStatus::Partial,
      "MOVN, ADR/ADRP, logical immediates, conditional selects, division, variable shifts, multiply-accumulate and linked branches are covered; the instruction set remains incomplete."},
     {"CPU", "Scalar S/D floating-point and FMOV", ImplementationStatus::Partial,
@@ -47,8 +47,10 @@ constexpr std::array<CompatibilityFeature, 13U> kCommonFeatures{{
      "Selected SVC/IRQ paths exist; no complete privilege or system-call ABI."},
     {"System", "Cooperative process/thread scheduler and handle table", ImplementationStatus::Partial,
      "A bounded host-side test substrate supports process/thread lifecycle, priority scheduling, wait/wake, and per-process typed handles; it is not Horizon-compatible."},
-    {"System", "HIPC/CMIF service manager and Horizon services", ImplementationStatus::NotImplemented,
-     "No IPC sessions, named services, filesystem, audio, input, or display service implementations."},
+    {"IPC", "HIPC/CMIF raw-only framing and command registry", ImplementationStatus::Partial,
+     "Bounds-checked HIPC headers, aligned SFCI/SFCO messages, and a host command registry are supported; handles, descriptors, domains, and Horizon services are not."},
+    {"System", "Horizon service implementations", ImplementationStatus::NotImplemented,
+     "No compatible service manager behavior, named system services, filesystem, audio, input, or display service implementations."},
     {"Graphics", "Guest console GPU command processor and shaders", ImplementationStatus::NotImplemented,
      "The native Vulkan backend runs Lucid's own test pipeline, not console GPU commands or shaders."},
     {"Graphics", "Host Vulkan renderer", ImplementationStatus::HostOnly,

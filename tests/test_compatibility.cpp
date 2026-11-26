@@ -49,8 +49,10 @@ void test_compatibility_reports() {
            "report the cooperative process/thread scheduler as partial");
     expect(original_text.find("[not implemented] System / General Horizon process loader and runtime") != std::string::npos,
            "report the missing general Horizon process runtime");
-    expect(original_text.find("[not implemented] System / HIPC/CMIF") != std::string::npos,
-           "report missing Horizon IPC and service implementations");
+    expect(original_text.find("[partial] IPC / HIPC/CMIF raw-only framing and command registry") != std::string::npos,
+           "report the limited raw-only HIPC/CMIF implementation");
+    expect(original_text.find("[not implemented] System / Horizon service implementations") != std::string::npos,
+           "report missing Horizon system services");
     expect(original_text.find("[partial] CPU / Scalar S/D floating-point and FMOV") != std::string::npos,
            "report the initial scalar floating-point subset as partial");
     expect(original_text.find("[not implemented] CPU / Advanced SIMD/NEON vector execution") != std::string::npos,

@@ -96,3 +96,10 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 - The new process/thread scheduler is deterministic and cooperative. It is not preemptive, has no timer quantum, and is not connected to automatic CPU execution.
 - Kernel handles are process-local typed identifiers only; event, mutex, semaphore, session, and transfer-memory objects do not yet implement their guest-visible behavior.
 - Address-space ownership, executable mapping, process launch parameters, TLS, SVC dispatch, HIPC/CMIF and Horizon services remain unimplemented.
+
+
+## HIPC/CMIF framing foundation
+
+- The parser supports only raw-data-only HIPC frames and CMIF Request/RequestWithContext messages. Pointer/static descriptors, send/receive/exchange buffers, PID, special headers, and copy/move handles are rejected.
+- CMIF domain headers and domain object routing are not supported. The service registry is a host dispatch abstraction, not Horizon service-manager emulation.
+- No real guest TLS command buffer, SVC IPC calls, HIPC session/handle lifecycle, TIPC, or named Horizon service implementation exists.
