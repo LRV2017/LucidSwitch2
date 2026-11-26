@@ -8,11 +8,19 @@
 
 namespace lucid::cpu {
 
+struct CpuFlags {
+    bool negative{};
+    bool zero{};
+    bool carry{};
+    bool overflow{};
+};
+
 struct CpuContext {
     std::array<std::uint64_t, 31> x{};
     std::uint64_t sp{};
     std::uint64_t program_counter{};
     std::uint64_t instructions_retired{};
+    CpuFlags flags{};
 };
 
 enum class StepResult {

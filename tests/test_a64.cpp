@@ -61,40 +61,67 @@ int main() {
            "execute NOP");
     expect(state.instructions_retired == 4U, "count retired instructions");
 
+    // ADDS XZR,X1,#0 sets flags from 50; SUBS XZR,X1,#50 sets Z and C.
+    write32(memory, base + 0x18U, 0xF100003FU);
+    write32(memory, base + 0x1CU, 0xF100C83FU);
+    write32(memory, base + 0x20U, 0x54000040U); // B.EQ +8
+    state.x[1] = 50U;
+    state.program_counter = base + 0x18U;
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute SUBS immediate and set NZCV");
+    expect(!state.flags.negative && !state.flags.zero && state.flags.carry &&
+           !state.flags.overflow, "SUBS updates N, Z, C and V for positive result");
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute SUBS to zero");
+    expect(state.flags.zero && state.flags.carry && !state.flags.negative &&
+           !state.flags.overflow, "SUBS sets zero and no-borrow flags");
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Branch,
+           "execute conditional B.EQ");
+    expect(state.program_counter == base + 0x28U,
+           "B.EQ branches when Z flag is set");
+
+    // A non-taken conditional branch advances normally.
+    write32(memory, base + 0x2CU, 0x54000041U); // B.NE +8
+    state.program_counter = base + 0x2CU;
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "non-taken B.NE does not branch");
+    expect(state.program_counter == base + 0x30U,
+           "non-taken conditional branch advances PC");
+
     // B +8 skips the next word; the branch target is PC+8.
-    write32(memory, base + 0x20U, 0x14000002U);
-    state.program_counter = base + 0x20U;
-    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Branch,
-           "execute unconditional branch");
-    expect(state.program_counter == base + 0x28U, "branch target is PC-relative");
-
-    // CBZ X3,+8, with X3 initially zero.
-    write32(memory, base + 0x30U, 0xB4000043U);
-    state.x[3] = 0U;
-    state.program_counter = base + 0x30U;
-    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Branch,
-           "execute CBZ");
-    expect(state.program_counter == base + 0x38U, "CBZ takes branch when zero");
-
-    // RET X30.
-    write32(memory, base + 0x40U, 0xD65F03C0U);
-    state.x[30] = base + 0x50U;
+    write32(memory, base + 0x40U, 0x14000002U);
     state.program_counter = base + 0x40U;
     expect(cpu.step(state, memory) == lucid::cpu::StepResult::Branch,
+           "execute unconditional branch");
+    expect(state.program_counter == base + 0x48U, "branch target is PC-relative");
+
+    // CBZ X3,+8, with X3 initially zero.
+    write32(memory, base + 0x50U, 0xB4000043U);
+    state.x[3] = 0U;
+    state.program_counter = base + 0x50U;
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Branch,
+           "execute CBZ");
+    expect(state.program_counter == base + 0x58U, "CBZ takes branch when zero");
+
+    // RET X30.
+    write32(memory, base + 0x60U, 0xD65F03C0U);
+    state.x[30] = base + 0x70U;
+    state.program_counter = base + 0x60U;
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Branch,
            "execute RET");
-    expect(state.program_counter == base + 0x50U, "RET loads PC from X30");
+    expect(state.program_counter == base + 0x70U, "RET loads PC from X30");
 
     // Unknown instruction must be rejected without mutating CPU state.
-    write32(memory, base + 0x60U, 0xFFFFFFFFU);
-    state.program_counter = base + 0x60U;
+    write32(memory, base + 0x80U, 0xFFFFFFFFU);
+    state.program_counter = base + 0x80U;
     const auto retired_before = state.instructions_retired;
     expect(cpu.step(state, memory) == lucid::cpu::StepResult::UnsupportedInstruction,
            "reject unsupported instruction");
-    expect(state.program_counter == base + 0x60U &&
+    expect(state.program_counter == base + 0x80U &&
            state.instructions_retired == retired_before,
            "unsupported instruction leaves state unchanged");
 
-    state.program_counter = base + 0x61U;
+    state.program_counter = base + 0x81U;
     expect(cpu.step(state, memory) == lucid::cpu::StepResult::MisalignedProgramCounter,
            "reject unaligned program counter");
 

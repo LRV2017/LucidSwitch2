@@ -9,12 +9,11 @@ This is a small, independently written interpreter for selected A64 instruction 
 - `NOP`
 - `MOVZ` (32-bit and 64-bit forms)
 - `MOVK` (32-bit and 64-bit forms)
-- `ADD (immediate)` and `SUB (immediate)`, without flag updates
+- `ADD/SUB (immediate)` and `ADDS/SUBS (immediate)`, including NZCV updates
 - `B` (unconditional PC-relative branch)
+- `B.cond` for the standard A64 condition codes
 - `CBZ` and `CBNZ`
 - `BR` and `RET`
-
-The subset currently treats register 31 as the zero register for supported data-processing operations. Stack-pointer semantics, condition flags, exceptions, privileged execution, SIMD/FP, atomics, system registers, and memory load/store instructions are not implemented.
 
 ## Execution contract
 
@@ -26,12 +25,18 @@ Each call to `A64Interpreter::step` attempts exactly one instruction:
 - `MemoryFault`: instruction fetch failed.
 - `MisalignedProgramCounter`: PC was not 4-byte aligned.
 
+The interpreter stores the four NZCV flags in `CpuContext::flags`. The flag-setting immediate arithmetic instructions update them; ordinary ADD/SUB preserve the prior flags. Register 31 is treated as the zero register for the currently supported data-processing operations.
+
 Instructions are fetched little-endian from the generic host-side `MemoryBus`. Tests use hand-authored instruction words and synthetic memory only; no console firmware or game files are involved.
+
+## Not yet implemented
+
+Stack-pointer semantics, scalar load/store, register-offset arithmetic, logical operations, exceptions, privileged execution, SIMD/FP, atomics, and system registers remain unsupported.
 
 ## Next steps
 
-1. Add arithmetic flag behavior and conditional branches.
-2. Add register arithmetic and logical instructions.
-3. Add scalar load/store operations and memory access faults.
+1. Add scalar load/store instructions with precise access-fault behavior.
+2. Add common register arithmetic and logical operations.
+3. Expand tests for overflow, carry, signed conditions, and instruction edge cases.
 4. Add a reusable A64 instruction test corpus based on public architectural specifications.
 5. Expand coverage only when each new group has deterministic tests.
