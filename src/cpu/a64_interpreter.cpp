@@ -11,6 +11,7 @@ namespace {
 
 [[nodiscard]] std::int64_t sign_extend(const std::uint64_t value,
                                        const unsigned bits) noexcept {
+    if (bits == 64U) return std::bit_cast<std::int64_t>(value);
     const std::uint64_t sign = std::uint64_t{1} << (bits - 1U);
     const std::uint64_t mask = (std::uint64_t{1} << bits) - 1U;
     const std::uint64_t narrowed = value & mask;
@@ -83,6 +84,50 @@ void write_register(CpuContext& context, const unsigned index,
         return;
     }
     context.x[index] = is_64_bit ? value : (value & 0xFFFFFFFFULL);
+}
+
+
+[[nodiscard]] bool decode_logical_immediate(
+    const bool n, const unsigned immr, const unsigned imms,
+    const bool is_64_bit, std::uint64_t& result) noexcept {
+    const unsigned width = is_64_bit ? 64U : 32U;
+    if (!is_64_bit && n) return false;
+    const std::uint32_t selector =
+        (static_cast<std::uint32_t>(n) << 6U) | ((~imms) & 0x3FU);
+    if (selector == 0U) return false;
+    const unsigned length = 31U - static_cast<unsigned>(std::countl_zero(selector));
+    if (length < 1U) return false;
+    const unsigned levels = (1U << length) - 1U;
+    const unsigned s_value = imms & levels;
+    const unsigned r_value = immr & levels;
+    if (s_value == levels) return false;
+    const unsigned element_size = 1U << length;
+    if (element_size > width) return false;
+    const unsigned ones = s_value + 1U;
+    std::uint64_t element = ones == 64U
+        ? std::numeric_limits<std::uint64_t>::max()
+        : ((std::uint64_t{1} << ones) - 1U);
+    const std::uint64_t element_mask = element_size == 64U
+        ? std::numeric_limits<std::uint64_t>::max()
+        : ((std::uint64_t{1} << element_size) - 1U);
+    const unsigned rotation = r_value % element_size;
+    if (rotation != 0U)
+        element = ((element >> rotation) |
+                   (element << (element_size - rotation))) & element_mask;
+    result = 0U;
+    for (unsigned bit = 0U; bit < width; bit += element_size)
+        result |= element << bit;
+    result &= width_mask(is_64_bit);
+    return true;
+}
+[[nodiscard]] std::uint64_t rotate_right(
+    const std::uint64_t value, const unsigned amount,
+    const unsigned width) noexcept {
+    const std::uint64_t mask = width == 64U
+        ? std::numeric_limits<std::uint64_t>::max() : 0xFFFFFFFFULL;
+    const unsigned shift = amount % width;
+    if (shift == 0U) return value & mask;
+    return ((value >> shift) | (value << (width - shift))) & mask;
 }
 
 void set_add_flags(CpuContext& context, const std::uint64_t left,
@@ -298,6 +343,170 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
         const std::uint64_t previous = read_register(context, destination);
         write_register(context, destination,
                        (previous & ~field_mask) | immediate, is_64_bit);
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
+
+    // MOVN: move wide with NOT, for both W and X register forms.
+    if ((instruction & 0x7F800000U) == 0x12800000U) {
+        const bool is_64_bit = (instruction >> 31U) != 0U;
+        const unsigned destination = instruction & 0x1FU;
+        const unsigned halfword = (instruction >> 21U) & 0x3U;
+        if (!is_64_bit && halfword > 1U) return StepResult::UnsupportedInstruction;
+        const unsigned shift = halfword * 16U;
+        const std::uint64_t immediate =
+            static_cast<std::uint64_t>((instruction >> 5U) & 0xFFFFU) << shift;
+        write_register(context, destination, ~immediate, is_64_bit);
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
+    // ADR / ADRP: signed PC-relative address generation.
+    if ((instruction & 0x1F000000U) == 0x10000000U) {
+        const bool page_relative = (instruction & 0x80000000U) != 0U;
+        const unsigned destination = instruction & 0x1FU;
+        const std::uint64_t immediate_bits =
+            (((instruction >> 5U) & 0x7FFFFU) << 2U) |
+            ((instruction >> 29U) & 0x3U);
+        const std::int64_t immediate = sign_extend(immediate_bits, 21U);
+        const std::uint64_t pc_base = page_relative
+            ? (context.program_counter & ~0xFFFULL) : context.program_counter;
+        const std::int64_t scaled = page_relative ? immediate * 4096LL : immediate;
+        const std::uint64_t address = static_cast<std::uint64_t>(
+            static_cast<std::int64_t>(pc_base) + scaled);
+        write_register(context, destination, address, true);
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
+    // Logical immediate: AND, ORR, EOR and ANDS.
+    if ((instruction & 0x1F800000U) == 0x12000000U) {
+        const bool is_64_bit = (instruction >> 31U) != 0U;
+        const unsigned operation = (instruction >> 29U) & 0x3U;
+        const bool n = ((instruction >> 22U) & 1U) != 0U;
+        const unsigned immr = (instruction >> 16U) & 0x3FU;
+        const unsigned imms = (instruction >> 10U) & 0x3FU;
+        std::uint64_t immediate = 0U;
+        if (!decode_logical_immediate(n, immr, imms, is_64_bit, immediate))
+            return StepResult::UnsupportedInstruction;
+        const unsigned destination = instruction & 0x1FU;
+        const unsigned source = (instruction >> 5U) & 0x1FU;
+        const std::uint64_t left =
+            read_register(context, source) & width_mask(is_64_bit);
+        std::uint64_t result = 0U;
+        switch (operation) {
+        case 0U: result = left & immediate; break;
+        case 1U: result = left | immediate; break;
+        case 2U: result = left ^ immediate; break;
+        case 3U: result = left & immediate; break;
+        }
+        result &= width_mask(is_64_bit);
+        write_register(context, destination, result, is_64_bit);
+        if (operation == 3U) set_logic_flags(context, result, is_64_bit);
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
+    // Conditional select family: CSEL, CSINC, CSINV and CSNEG.
+    if ((instruction & 0x1FE00000U) == 0x1A800000U) {
+        const bool is_64_bit = (instruction >> 31U) != 0U;
+        const bool invert = (instruction & 0x40000000U) != 0U;
+        const bool increment = (instruction & 0x00000400U) != 0U;
+        const unsigned destination = instruction & 0x1FU;
+        const unsigned left_index = (instruction >> 5U) & 0x1FU;
+        const unsigned condition = (instruction >> 12U) & 0xFU;
+        const unsigned right_index = (instruction >> 16U) & 0x1FU;
+        const bool take_left = condition_holds(context.flags, condition);
+        std::uint64_t result = take_left
+            ? read_register(context, left_index) : read_register(context, right_index);
+        if (!take_left) {
+            if (invert) result = ~result;
+            if (increment) result += 1U;
+        }
+        write_register(context, destination, result, is_64_bit);
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
+    // Data-processing two-source: UDIV/SDIV and variable shifts.
+    const std::uint32_t two_source_opcode = instruction & 0x7FE0FC00U;
+    if (two_source_opcode == 0x1AC00800U || two_source_opcode == 0x1AC00C00U ||
+        two_source_opcode == 0x1AC02000U || two_source_opcode == 0x1AC02400U ||
+        two_source_opcode == 0x1AC02800U || two_source_opcode == 0x1AC02C00U) {
+        const bool is_64_bit = (instruction >> 31U) != 0U;
+        const unsigned destination = instruction & 0x1FU;
+        const unsigned left_index = (instruction >> 5U) & 0x1FU;
+        const unsigned right_index = (instruction >> 16U) & 0x1FU;
+        const std::uint64_t mask = width_mask(is_64_bit);
+        const std::uint64_t left = read_register(context, left_index) & mask;
+        const std::uint64_t right = read_register(context, right_index) & mask;
+        const unsigned width = is_64_bit ? 64U : 32U;
+        const unsigned shift = static_cast<unsigned>(right & (width - 1U));
+        std::uint64_t result = 0U;
+        switch (two_source_opcode) {
+        case 0x1AC00800U:
+            result = right == 0U ? 0U : left / right;
+            break;
+        case 0x1AC00C00U:
+            if (is_64_bit) {
+                const std::int64_t a = std::bit_cast<std::int64_t>(left);
+                const std::int64_t b = std::bit_cast<std::int64_t>(right);
+                if (b == 0) result = 0U;
+                else if (a == std::numeric_limits<std::int64_t>::min() && b == -1)
+                    result = static_cast<std::uint64_t>(a);
+                else result = static_cast<std::uint64_t>(a / b);
+            } else {
+                const std::int32_t a = std::bit_cast<std::int32_t>(
+                    static_cast<std::uint32_t>(left));
+                const std::int32_t b = std::bit_cast<std::int32_t>(
+                    static_cast<std::uint32_t>(right));
+                if (b == 0) result = 0U;
+                else if (a == std::numeric_limits<std::int32_t>::min() && b == -1)
+                    result = static_cast<std::uint32_t>(a);
+                else result = static_cast<std::uint32_t>(a / b);
+            }
+            break;
+        case 0x1AC02000U: result = (left << shift) & mask; break;
+        case 0x1AC02400U: result = left >> shift; break;
+        case 0x1AC02800U:
+            if (is_64_bit)
+                result = static_cast<std::uint64_t>(
+                    std::bit_cast<std::int64_t>(left) >> shift) & mask;
+            else
+                result = static_cast<std::uint32_t>(
+                    std::bit_cast<std::int32_t>(static_cast<std::uint32_t>(left)) >> shift);
+            break;
+        case 0x1AC02C00U: result = rotate_right(left, shift, width); break;
+        default: return StepResult::UnsupportedInstruction;
+        }
+        write_register(context, destination, result, is_64_bit);
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
+    // MADD/MSUB and MUL alias (32-bit and 64-bit).
+    if ((instruction & 0x1F000000U) == 0x1B000000U) {
+        const bool is_64_bit = (instruction >> 31U) != 0U;
+        const bool subtract = (instruction & 0x00008000U) != 0U;
+        const unsigned destination = instruction & 0x1FU;
+        const unsigned multiplicand_a = (instruction >> 5U) & 0x1FU;
+        const unsigned accumulator = (instruction >> 10U) & 0x1FU;
+        const unsigned multiplicand_b = (instruction >> 16U) & 0x1FU;
+        const std::uint64_t mask = width_mask(is_64_bit);
+        const std::uint64_t a = read_register(context, multiplicand_a) & mask;
+        const std::uint64_t b = read_register(context, multiplicand_b) & mask;
+        const std::uint64_t addend = read_register(context, accumulator) & mask;
+        const std::uint64_t product = (a * b) & mask;
+        const std::uint64_t result = subtract
+            ? (addend - product) & mask : (product + addend) & mask;
+        write_register(context, destination, result, is_64_bit);
         context.program_counter = next_pc;
         ++context.instructions_retired;
         return StepResult::Executed;
@@ -563,6 +772,8 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
     // B: unconditional PC-relative branch.
     if ((instruction & 0x7C000000U) == 0x14000000U) {
         const auto displacement = sign_extend(instruction & 0x03FFFFFFU, 26U) * 4;
+        if ((instruction & 0x80000000U) != 0U)
+            write_register(context, 30U, next_pc, true);
         context.program_counter = static_cast<std::uint64_t>(
             static_cast<std::int64_t>(context.program_counter) + displacement);
         ++context.instructions_retired;
@@ -593,8 +804,12 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
 
     // BR / RET: indirect branches. RET defaults to X30.
     const std::uint32_t branch_class = instruction & 0xFFFFFC1FU;
-    if (branch_class == 0xD61F0000U || branch_class == 0xD65F0000U) {
+    if (branch_class == 0xD61F0000U ||
+        branch_class == 0xD63F0000U ||
+        branch_class == 0xD65F0000U) {
         const unsigned source = (instruction >> 5U) & 0x1FU;
+        if (branch_class == 0xD63F0000U)
+            write_register(context, 30U, next_pc, true);
         context.program_counter = read_register(context, source);
         ++context.instructions_retired;
         return StepResult::Branch;
