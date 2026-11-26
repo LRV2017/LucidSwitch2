@@ -61,7 +61,7 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 - The runner uses a fixed 64 KiB stack, bounded guest memory, and a maximum 10,000,000-instruction budget.
 - The emulated CPU supports only the documented A64 subset. Real homebrew commonly depends on many instructions and services not implemented here.
 - The current implementation uses one coarse RWX guest RAM mapping; it does not yet enforce per-segment text/rodata/data page permissions.
-- No loader configuration entries, system-call implementation, process/thread manager, HIPC/CMIF, filesystem, input, audio, display, or guest GPU are provided.
+- No loader configuration entries or general system-call ABI are provided; only SVC 0x10 and 0x1E are dispatched. The process/thread manager is a host-side substrate, not a guest Horizon runtime; HIPC/CMIF, filesystem, input, audio, display, and guest GPU are not integrated.
 - An instruction-budget stop proves only that this small program ran for the requested number of instructions; it is not evidence of game compatibility.
 - Protected NSP/XCI/NCA content and production/title-key decryption are not supported.
 
@@ -95,7 +95,7 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 
 - The new process/thread scheduler is deterministic and cooperative. It is not preemptive, has no timer quantum, and is not connected to automatic CPU execution.
 - Kernel handles are process-local typed identifiers only; event, mutex, semaphore, session, and transfer-memory objects do not yet implement their guest-visible behavior.
-- Address-space ownership, executable mapping, process launch parameters, TLS, SVC dispatch, HIPC/CMIF and Horizon services remain unimplemented.
+- Address-space ownership, executable mapping, process launch parameters, TLS ABI, HIPC/CMIF integration, and Horizon services remain unimplemented. Only EL0 SVC 0x10 and 0x1E are dispatched.
 
 
 ## HIPC/CMIF framing foundation
@@ -128,3 +128,10 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 
 - Integer register-offset LDR/STR supports UXTW, LSL, SXTW and SXTX index extensions and optional element-size scaling.
 - SIMD/FP vector memory operations and exclusive/atomic accesses remain unsupported; no multi-core memory ordering model is present.
+
+
+## Initial EL0 SVC dispatch
+
+- SVC 0x10 returns virtual processor 0 because the current execution model has one CPU.
+- SVC 0x1E returns the deterministic virtual timer counter. The counter currently advances one tick per guest instruction and is not calibrated to the Switch hardware counter frequency.
+- Other SVC numbers are not dispatched and remain on the guest EL1 vector path. WaitSynchronization (0x18), IPC send/receive, thread/process creation and termination, mutex/event semantics, memory mapping/query calls, and the remainder of the Horizon SVC table are not implemented.
