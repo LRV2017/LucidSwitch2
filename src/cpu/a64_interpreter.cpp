@@ -25,6 +25,11 @@ namespace {
     return index == 31U ? 0U : context.x[index];
 }
 
+[[nodiscard]] std::uint64_t read_base_register(const CpuContext& context,
+                                               const unsigned index) noexcept {
+    return index == 31U ? context.sp : context.x[index];
+}
+
 void write_register(CpuContext& context, const unsigned index,
                     const std::uint64_t value, const bool is_64_bit) noexcept {
     if (index == 31U) {
@@ -156,6 +161,56 @@ StepResult A64Interpreter::step(CpuContext& context, core::MemoryBus& memory) {
         const std::uint64_t previous = read_register(context, destination);
         write_register(context, destination,
                        (previous & ~field_mask) | immediate, is_64_bit);
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
+    // Unsigned-immediate scalar LDR/STR for byte, halfword, word and X-register sizes.
+    // Register 31 is SP for the address base and XZR/WZR for transferred data.
+    if ((instruction & 0x3B000000U) == 0x39000000U) {
+        const unsigned size = (instruction >> 30U) & 0x3U;
+        const unsigned opc = (instruction >> 22U) & 0x3U;
+        if (opc > 1U) {
+            return StepResult::UnsupportedInstruction;
+        }
+
+        const std::size_t transfer_size = std::size_t{1} << size;
+        const unsigned target = instruction & 0x1FU;
+        const unsigned base_register = (instruction >> 5U) & 0x1FU;
+        const std::uint64_t base = read_base_register(context, base_register);
+        const std::uint64_t offset =
+            static_cast<std::uint64_t>((instruction >> 10U) & 0xFFFU) << size;
+        if (base > std::numeric_limits<std::uint64_t>::max() - offset) {
+            return StepResult::MemoryFault;
+        }
+        const std::uint64_t address = base + offset;
+        std::array<std::uint8_t, 8> bytes{};
+
+        if (opc == 0U) { // STR
+            const std::uint64_t value = read_register(context, target);
+            for (std::size_t index = 0; index < transfer_size; ++index) {
+                bytes[index] = static_cast<std::uint8_t>(
+                    (value >> (index * 8U)) & 0xFFU);
+            }
+            const auto data = std::span<const std::uint8_t>(
+                bytes.data(), transfer_size);
+            if (!memory.write(address, data)) {
+                return StepResult::MemoryFault;
+            }
+        } else { // LDR (zero-extends byte/halfword/word loads into W registers)
+            const auto data = std::span<std::uint8_t>(
+                bytes.data(), transfer_size);
+            if (!memory.read(address, data)) {
+                return StepResult::MemoryFault;
+            }
+            std::uint64_t value = 0U;
+            for (std::size_t index = 0; index < transfer_size; ++index) {
+                value |= static_cast<std::uint64_t>(bytes[index]) << (index * 8U);
+            }
+            write_register(context, target, value, size == 3U);
+        }
+
         context.program_counter = next_pc;
         ++context.instructions_retired;
         return StepResult::Executed;

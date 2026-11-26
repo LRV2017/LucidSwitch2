@@ -12,6 +12,7 @@ This is a small, independently written interpreter for selected A64 instruction 
 - `ADD/SUB (immediate)` and `ADDS/SUBS (immediate)`, including NZCV updates
 - `B` (unconditional PC-relative branch)
 - `B.cond` for the standard A64 condition codes
+- Unsigned-offset `LDR` and `STR` for 8-, 16-, 32-, and 64-bit values
 - `CBZ` and `CBNZ`
 - `BR` and `RET`
 
@@ -31,12 +32,12 @@ Instructions are fetched little-endian from the generic host-side `MemoryBus`. T
 
 ## Not yet implemented
 
-Stack-pointer semantics, scalar load/store, register-offset arithmetic, logical operations, exceptions, privileged execution, SIMD/FP, atomics, and system registers remain unsupported.
+Pre/post-indexed and register-offset memory addressing, signed loads, register arithmetic, logical operations, exceptions, privileged execution, SIMD/FP, atomics, and system registers remain unsupported.
 
 ## Next steps
 
-1. Add scalar load/store instructions with precise access-fault behavior.
-2. Add common register arithmetic and logical operations.
+1. Add common register arithmetic and logical operations.
+2. Add pre/post-indexed and register-offset memory addressing.
 3. Expand tests for overflow, carry, signed conditions, and instruction edge cases.
 4. Add a reusable A64 instruction test corpus based on public architectural specifications.
 5. Expand coverage only when each new group has deterministic tests.

@@ -111,6 +111,65 @@ int main() {
            "execute RET");
     expect(state.program_counter == base + 0x70U, "RET loads PC from X30");
 
+    // Scalar unsigned-offset stores and loads: STR/LDR B, H, W and X.
+    write32(memory, base + 0x90U, 0x39000480U); // STRB W0,[X4,#1]
+    write32(memory, base + 0x94U, 0x39400481U); // LDRB W1,[X4,#1]
+    write32(memory, base + 0x98U, 0x79000482U); // STRH W2,[X4,#2]
+    write32(memory, base + 0x9CU, 0x79400483U); // LDRH W3,[X4,#2]
+    write32(memory, base + 0xA0U, 0xB9000485U); // STR W5,[X4,#4]
+    write32(memory, base + 0xA4U, 0xB9400486U); // LDR W6,[X4,#4]
+    write32(memory, base + 0xA8U, 0xF9000487U); // STR X7,[X4,#8]
+    write32(memory, base + 0xACU, 0xF9400488U); // LDR X8,[X4,#8]
+    state.x[0] = 0xA5U;
+    state.x[2] = 0xBEEFU;
+    state.x[4] = base + 0xC0U;
+    state.x[5] = 0x12345678U;
+    state.x[7] = 0x1122334455667788ULL;
+    state.program_counter = base + 0x90U;
+    for (unsigned index = 0; index < 8U; ++index) {
+        expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+               "execute scalar unsigned-offset LDR/STR");
+    }
+    expect(state.x[1] == 0xA5U, "LDRB zero-extends an 8-bit value");
+    expect(state.x[3] == 0xBEEFU, "LDRH zero-extends a 16-bit value");
+    expect(state.x[6] == 0x12345678U, "LDR W loads a 32-bit value");
+    expect(state.x[8] == 0x1122334455667788ULL, "LDR X loads a 64-bit value");
+
+    // Base register 31 denotes SP in the memory addressing mode.
+    write32(memory, base + 0xB0U, 0xF9000BE9U); // STR X9,[SP,#16]
+    write32(memory, base + 0xB4U, 0xF9400BEAU); // LDR X10,[SP,#16]
+    state.sp = base + 0xC0U;
+    state.x[9] = 0x8877665544332211ULL;
+    state.program_counter = base + 0xB0U;
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "STR uses SP when Rn is 31");
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "LDR uses SP when Rn is 31");
+    expect(state.x[10] == 0x8877665544332211ULL,
+           "SP-relative load returns the stored 64-bit value");
+
+    // A faulting 64-bit access must not partially update CPU state.
+    write32(memory, base + 0xB8U, 0xF940000BU); // LDR X11,[X4]
+    write32(memory, base + 0xBCU, 0xF900000CU); // STR X12,[X4]
+    state.x[4] = base + 0xFCU; // only four bytes remain in this mapping
+    state.x[11] = 0xCAFEBABEULL;
+    state.x[12] = 0xDEADBEEFULL;
+    state.program_counter = base + 0xB8U;
+    const auto before_load_fault = state.instructions_retired;
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::MemoryFault,
+           "LDR reports a cross-boundary memory fault");
+    expect(state.x[11] == 0xCAFEBABEULL &&
+           state.program_counter == base + 0xB8U &&
+           state.instructions_retired == before_load_fault,
+           "faulting LDR leaves CPU state unchanged");
+    state.program_counter = base + 0xBCU;
+    const auto before_store_fault = state.instructions_retired;
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::MemoryFault,
+           "STR reports a cross-boundary memory fault");
+    expect(state.program_counter == base + 0xBCU &&
+           state.instructions_retired == before_store_fault,
+           "faulting STR leaves PC and retired count unchanged");
+
     // Unknown instruction must be rejected without mutating CPU state.
     write32(memory, base + 0x80U, 0xFFFFFFFFU);
     state.program_counter = base + 0x80U;
