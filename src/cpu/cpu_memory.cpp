@@ -56,7 +56,7 @@ bool CpuMemory::read_instruction(const std::uint64_t address,
     if (address_space_ == nullptr) {
         return physical_memory_.read_instruction(address, output);
     }
-    std::vector<std::uint64_t> physical_addresses;
+    std::array<std::uint64_t, 8> physical_addresses{};
     if (!translate_and_validate(address, output.size(), mmu::AccessType::Execute,
                                 core::MemoryPermission::Execute,
                                 physical_addresses)) {
@@ -74,7 +74,7 @@ bool CpuMemory::read_instruction(const std::uint64_t address,
 bool CpuMemory::write(const std::uint64_t address,
                       const std::span<const std::uint8_t> input) {
     if (address_space_ == nullptr) return physical_memory_.write(address, input);
-    std::vector<std::uint64_t> physical_addresses;
+    std::array<std::uint64_t, 8> physical_addresses{};
     if (!translate_and_validate(address, input.size(), mmu::AccessType::Write,
                                 core::MemoryPermission::Write,
                                 physical_addresses)) {
