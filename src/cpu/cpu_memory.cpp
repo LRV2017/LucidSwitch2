@@ -1,5 +1,6 @@
 #include "lucid/cpu/cpu_memory.hpp"
 
+#include <array>
 #include <limits>
 
 namespace lucid::cpu {
@@ -12,24 +13,23 @@ bool CpuMemory::translate_and_validate(
     const std::uint64_t address, const std::size_t size,
     const mmu::AccessType access,
     const core::MemoryPermission physical_permission,
-    std::vector<std::uint64_t>& physical_addresses) const {
-    physical_addresses.clear();
+    std::array<std::uint64_t, 8>& physical_addresses) const {
+    physical_addresses.fill(0U);
     if (size == 0U) return true;
+    if (size > physical_addresses.size()) return false;
     if (size - 1U > std::numeric_limits<std::uint64_t>::max() - address) {
         return false;
     }
 
-    physical_addresses.reserve(size);
     for (std::size_t index = 0; index < size; ++index) {
         const auto virtual_address = address + static_cast<std::uint64_t>(index);
         const auto translated = address_space_->translate(virtual_address, access);
         if (!translated ||
             !physical_memory_.can_access(translated.physical_address, 1U,
                                          physical_permission)) {
-            physical_addresses.clear();
             return false;
         }
-        physical_addresses.push_back(translated.physical_address);
+        physical_addresses[index] = translated.physical_address;
     }
     return true;
 }
@@ -37,7 +37,7 @@ bool CpuMemory::translate_and_validate(
 bool CpuMemory::read(const std::uint64_t address,
                      const std::span<std::uint8_t> output) const {
     if (address_space_ == nullptr) return physical_memory_.read(address, output);
-    std::vector<std::uint64_t> physical_addresses;
+    std::array<std::uint64_t, 8> physical_addresses{};
     if (!translate_and_validate(address, output.size(), mmu::AccessType::Read,
                                 core::MemoryPermission::Read,
                                 physical_addresses)) {

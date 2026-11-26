@@ -3,9 +3,9 @@
 #include "lucid/core/memory_bus.hpp"
 #include "lucid/mmu/address_space.hpp"
 
+#include <array>
 #include <cstdint>
 #include <span>
-#include <vector>
 
 namespace lucid::cpu {
 
@@ -27,7 +27,7 @@ private:
     [[nodiscard]] bool translate_and_validate(
         std::uint64_t address, std::size_t size, mmu::AccessType access,
         core::MemoryPermission physical_permission,
-        std::vector<std::uint64_t>& physical_addresses) const;
+        std::array<std::uint64_t, 8>& physical_addresses) const;
 
     core::MemoryBus& physical_memory_;
     const mmu::AddressSpace* address_space_;
