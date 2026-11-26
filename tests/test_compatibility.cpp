@@ -45,6 +45,10 @@ void test_compatibility_reports() {
            "report original Switch NRO/NSO metadata-only support");
     expect(original_text.find("[not implemented] System / HIPC/CMIF") != std::string::npos,
            "report missing Horizon IPC and service implementations");
+    expect(original_text.find("[partial] CPU / Scalar S/D floating-point and FMOV") != std::string::npos,
+           "report the initial scalar floating-point subset as partial");
+    expect(original_text.find("[not implemented] CPU / Advanced SIMD/NEON vector execution") != std::string::npos,
+           "keep Advanced SIMD/NEON explicitly unsupported");
     expect(original_text.find("[metadata-only] Container / NSP/PFS0 directory inspection") != std::string::npos,
            "report NSP package directory inspection as metadata-only");
     expect(original_text.find("[partial] Executable / Restricted plaintext NRO homebrew execution") != std::string::npos,

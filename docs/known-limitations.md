@@ -2,7 +2,7 @@
 
 This document is intentionally blunt so the project's maturity is not overstated.
 
-- The A64 interpreter implements only the documented subset in a64-subset.md, not the complete ARMv8-A instruction set.
+- The A64 interpreter implements only the documented subset in a64-subset.md, not the complete ARMv8-A instruction set. Scalar S/D FP support is limited to FMOV, FADD, FSUB, FMUL, and FDIV; it is not full FP/SIMD support.
 - The stage-1 MMU supports only one constrained 4 KiB / 48-bit TTBR0 regime with EL1 permission interpretation; it is not a complete ARMv8-A translation implementation.
 - No TTBR1, ASIDs, additional translation granules, stage-2 translation, complete TLB maintenance instructions, memory attribute handling, or full architectural fault syndromes are implemented.
 - MRS/MSR writes to TTBR0_EL1 and TCR_EL1 update the modeled register bank but do not yet reconfigure the active Stage1Mmu.
@@ -73,3 +73,12 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 - NCA headers and protected sections are not decrypted or parsed; production/title keys are not imported or used.
 - Every imported package remains marked not launchable. The runtime and guest systems required by a Switch title are not implemented.
 - The frontend accepts `.nsp` files and persists a local summary only; it does not retain/upload package bytes.
+
+
+## Phase 10 initial scalar floating-point support
+
+- The CPU context models 32 128-bit SIMD/FP registers, but only selected scalar S/D transfer and arithmetic instructions are implemented.
+- FMOV is bit-preserving for the supported general-register and scalar FP lane transfers; full SIMD lane semantics are not modeled.
+- Scalar arithmetic uses host `float`/`double` operations. FPCR/FPSR, architectural rounding modes, exception flags and traps, flush-to-zero controls, and implementation-specific NaN behavior are not modeled.
+- No Advanced SIMD/NEON arithmetic, vector loads/stores, table lookups, saturating/halving operations, or vector crypto are implemented.
+- The limited scalar FP support does not materially establish commercial title compatibility; the CPU core still lacks many common A64 integer instructions, atomics/exclusives, and target-specific architectural behavior.

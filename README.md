@@ -16,9 +16,9 @@ An experimental, clean-room emulator research project focused on building a lawf
 
 - C++20 / CMake project with cross-platform CI for Windows, Linux, and macOS.
 - Checked memory regions with read, write, and execute permissions.
-- CPU context with 31 general-purpose registers, SP, PC, retired-instruction count, and NZCV flags.
+- CPU context with 31 general-purpose registers, 32 modeled 128-bit SIMD/FP registers, SP, PC, retired-instruction count, and NZCV flags.
 - Bounded emulator execution loop with program loading, pause-on-budget, resume, stop, and explicit CPU fault reporting.
-- Small A64 interpreter subset: NOP, MOVZ, MOVK, immediate and shifted-register ADD/SUB, selected logical operations, NZCV updates, common branches, unsigned-offset scalar LDR/STR, and selected MRS/MSR system-register accesses.
+- Small A64 interpreter subset: NOP, MOVZ, MOVK, immediate and shifted-register ADD/SUB, selected logical operations, scalar S/D FMOV and FADD/FSUB/FMUL/FDIV, NZCV updates, common branches, unsigned-offset scalar LDR/STR, and selected MRS/MSR system-register accesses.
 - Translation-aware CPU memory facade: instruction fetches and data accesses pass through the stage-1 walker and TLB; emulator sessions build a synthetic identity map using L1 1 GiB block descriptors.
 - Limited ARM stage-1 support: 4 KiB granule, 48-bit lower VA / 48-bit PA, TTBR0_EL1, L0-L3 walks, L1/L2 blocks, L3 pages, access-flag and EL1 permission checks, and explicit TLB invalidation.
 - Limited exception model: EL0/EL1 state, SVC entry, EL1 vector routing, SPSR_EL1/ELR_EL1 save-and-restore, ERET, and deterministic timer-driven IRQ delivery.
@@ -28,6 +28,7 @@ An experimental, clean-room emulator research project focused on building a lawf
 - Phase 8 compatibility research foundation: separate original-Switch and Switch 2 architecture profiles, a read-only plaintext NRO0/NSO0 metadata inspector, and target-specific compatibility-gap reports.
 - Phase 9 restricted homebrew execution prototype: a bounded loader for a deliberately small subset of plaintext, uncompressed original-Switch NRO files with a direct entry branch and no MOD0/dynamic-linking metadata.
 - NSP package import: a read-only PFS0 directory parser that validates package metadata and lists NCA, ticket, certificate, and other entries without reading/decrypting NCA content.
+- Phase 10 initial CPU expansion: 32 modeled 128-bit FP/SIMD registers and scalar single/double FMOV, FADD, FSUB, FMUL, and FDIV instructions; advanced vector NEON and FP control remain unsupported.
 
 The LXP format is an original synthetic test container. It is not a Nintendo executable format and does not implement a guest operating system, syscalls, dynamic linking, or console services. See [docs/homebrew-format.md](docs/homebrew-format.md).
 
@@ -105,7 +106,7 @@ Phases 1-8 established the host and research foundation. Phase 9 adds a restrict
 7. Native graphics execution: native Vulkan shader pipeline, GPU-side geometry/textures, off-screen readback, and optional SDL2 swapchain presentation.
 8. Compatibility research baseline: separate original-Switch and Switch 2 target profiles, plaintext NRO0/NSO0 metadata inspection, architecture documentation, and explicit compatibility-gap reports.
 9. Homebrew image loading: initial restricted NRO execution proof for a direct branch-to-text, no-MOD0 image using the bounded A64 subset. Full segment permissions, MOD0 relocation handling, and the standard homebrew runtime remain future work.
-10. CPU completion work: SIMD/NEON, floating point, atomics/exclusives, broader exception handling, and target-specific CPU extensions.
+10. CPU completion work: expand scalar FP precision/control, implement advanced SIMD/NEON, atomics/exclusives, broader exception handling, and target-specific CPU extensions.
 11. Kernel/process model: address-space management, SVC ABI, process/thread state, scheduler, handles, TLS, synchronization, and timers.
 12. Horizon IPC and services: HIPC/CMIF framing, sessions/domains, service-manager behavior, and selected documented homebrew-facing services.
 13. Platform services: filesystem, content access, input, audio, display, and application lifecycle.
