@@ -375,6 +375,93 @@ int main() {
            state.x[3] == fp_unsupported_x3,
            "unsupported scalar FP encoding leaves CPU state unchanged");
 
+
+    // Common scalar integer instructions needed by compiled workloads.
+    write32(memory, base + 0x00U, 0x92824680U); // MOVN X0,#0x1234
+    write32(memory, base + 0x04U, 0x10000041U); // ADR X1,+8
+    write32(memory, base + 0x08U, 0x9AC40862U); // UDIV X2,X3,X4
+    write32(memory, base + 0x0CU, 0x9AC70CC5U); // SDIV X5,X6,X7
+    state = lucid::cpu::CpuContext{};
+    state.program_counter = base;
+    state.x[3] = 100U;
+    state.x[4] = 9U;
+    state.x[6] = static_cast<std::uint64_t>(-81LL);
+    state.x[7] = 9U;
+    for (unsigned index = 0U; index < 4U; ++index) {
+        expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+               "execute MOVN, ADR and signed/unsigned divide instructions");
+    }
+    expect(state.x[0] == 0xFFFFFFFFFFFFEDCBULL,
+           "MOVN inverts the selected 16-bit immediate across X register");
+    expect(state.x[1] == base + 12U,
+           "ADR creates a signed PC-relative address");
+    expect(state.x[2] == 11U,
+           "UDIV computes unsigned integer quotient");
+    expect(state.x[5] == static_cast<std::uint64_t>(-9LL),
+           "SDIV computes signed integer quotient");
+
+    // Logical-immediate bitmask and variable shifts.
+    write32(memory, base + 0x10U, 0x92401C30U); // AND X16,X1,#0xff
+    write32(memory, base + 0x14U, 0x9AC22024U); // LSLV X4,X1,X2
+    write32(memory, base + 0x18U, 0x9AC22425U); // LSRV X5,X1,X2
+    write32(memory, base + 0x1CU, 0x9AC22826U); // ASRV X6,X1,X2
+    write32(memory, base + 0x20U, 0x9AC22C27U); // RORV X7,X1,X2
+    state.x[1] = 0xF123456789ABCDEFULL;
+    state.x[2] = 4U;
+    state.program_counter = base + 0x10U;
+    for (unsigned index = 0U; index < 5U; ++index) {
+        expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+               "execute logical immediate or variable shift instruction");
+    }
+    expect(state.x[16] == 0xEFU,
+           "logical immediate expands a replicated bitmask correctly");
+    expect(state.x[4] == (state.x[1] << 4U),
+           "LSLV masks the shift count and shifts left");
+    expect(state.x[5] == (state.x[1] >> 4U),
+           "LSRV shifts right logically");
+    expect(state.x[6] == (state.x[1] >> 4U),
+           "ASRV preserves a positive value's sign");
+    expect(state.x[7] == ((state.x[1] >> 4U) | (state.x[1] << 60U)),
+           "RORV rotates within the 64-bit operand width");
+
+    // MADD/MSUB and conditional-select instructions.
+    write32(memory, base + 0x24U, 0x9B020C28U); // MADD X8,X1,X2,X3
+    write32(memory, base + 0x28U, 0x9B028C29U); // MSUB X9,X1,X2,X3
+    write32(memory, base + 0x2CU, 0x9A82002CU); // CSEL X12,X1,X2,EQ
+    write32(memory, base + 0x30U, 0x9A82042DU); // CSINC X13,X1,X2,EQ
+    write32(memory, base + 0x34U, 0xDA82002EU); // CSINV X14,X1,X2,EQ
+    write32(memory, base + 0x38U, 0xDA82042FU); // CSNEG X15,X1,X2,EQ
+    state.x[1] = 7U;
+    state.x[2] = 3U;
+    state.x[3] = 5U;
+    state.flags.zero = true;
+    state.program_counter = base + 0x24U;
+    for (unsigned index = 0U; index < 6U; ++index) {
+        expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+               "execute multiply-accumulate or conditional-select instruction");
+    }
+    expect(state.x[8] == 26U, "MADD computes product plus accumulator");
+    expect(state.x[9] == 0xFFFFFFFFFFFFFFF0ULL,
+           "MSUB computes accumulator minus product");
+    expect(state.x[12] == 7U && state.x[13] == 7U &&
+           state.x[14] == 7U && state.x[15] == 7U,
+           "conditional-select family uses the first operand when condition is true");
+
+    // BL and BLR must preserve the return address in X30.
+    write32(memory, base + 0x3CU, 0x94000002U); // BL +8
+    state.program_counter = base + 0x3CU;
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Branch,
+           "execute BL immediate");
+    expect(state.x[30] == base + 0x40U && state.program_counter == base + 0x44U,
+           "BL stores the following instruction address in X30");
+    write32(memory, base + 0x44U, 0xD63F00A0U); // BLR X5
+    state.x[5] = base + 0x60U;
+    state.program_counter = base + 0x44U;
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Branch,
+           "execute BLR register");
+    expect(state.x[30] == base + 0x48U && state.program_counter == base + 0x60U,
+           "BLR stores the following instruction address in X30");
+
     if (failures != 0) {
         std::cerr << failures << " A64 test(s) failed.\n";
         return 1;

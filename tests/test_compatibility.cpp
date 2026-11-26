@@ -43,6 +43,10 @@ void test_compatibility_reports() {
     const std::string original_text = original.str();
     expect(original_text.find("NRO0/NSO0 plaintext metadata inspection") != std::string::npos,
            "report original Switch NRO/NSO metadata-only support");
+    expect(original_text.find("[partial] CPU / AArch64 scalar integer interpreter") != std::string::npos,
+           "report expanded but incomplete AArch64 scalar execution");
+    expect(original_text.find("[not implemented] System / General Horizon process loader and runtime") != std::string::npos,
+           "report the missing general Horizon process runtime");
     expect(original_text.find("[not implemented] System / HIPC/CMIF") != std::string::npos,
            "report missing Horizon IPC and service implementations");
     expect(original_text.find("[partial] CPU / Scalar S/D floating-point and FMOV") != std::string::npos,

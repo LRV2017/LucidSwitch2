@@ -18,7 +18,7 @@ An experimental, clean-room emulator research project focused on building a lawf
 - Checked memory regions with read, write, and execute permissions.
 - CPU context with 31 general-purpose registers, 32 modeled 128-bit SIMD/FP registers, SP, PC, retired-instruction count, and NZCV flags.
 - Bounded emulator execution loop with program loading, pause-on-budget, resume, stop, and explicit CPU fault reporting.
-- Small A64 interpreter subset: NOP, MOVZ, MOVK, immediate and shifted-register ADD/SUB, selected logical operations, scalar S/D FMOV and FADD/FSUB/FMUL/FDIV, NZCV updates, common branches, unsigned-offset scalar LDR/STR, and selected MRS/MSR system-register accesses.
+- Expanded but incomplete A64 interpreter: MOVN/MOVZ/MOVK, ADR/ADRP, logical immediates, conditional selects, UDIV/SDIV, variable shifts, MADD/MSUB, linked branches, scalar S/D FMOV and FADD/FSUB/FMUL/FDIV, NZCV updates, common branches, unsigned-offset scalar LDR/STR, and selected MRS/MSR system-register accesses.
 - Translation-aware CPU memory facade: instruction fetches and data accesses pass through the stage-1 walker and TLB; emulator sessions build a synthetic identity map using L1 1 GiB block descriptors.
 - Limited ARM stage-1 support: 4 KiB granule, 48-bit lower VA / 48-bit PA, TTBR0_EL1, L0-L3 walks, L1/L2 blocks, L3 pages, access-flag and EL1 permission checks, and explicit TLB invalidation.
 - Limited exception model: EL0/EL1 state, SVC entry, EL1 vector routing, SPSR_EL1/ELR_EL1 save-and-restore, ERET, and deterministic timer-driven IRQ delivery.
@@ -29,6 +29,7 @@ An experimental, clean-room emulator research project focused on building a lawf
 - Phase 9 restricted homebrew execution prototype: a bounded loader for a deliberately small subset of plaintext, uncompressed original-Switch NRO files with a direct entry branch and no MOD0/dynamic-linking metadata.
 - NSP package import: a read-only PFS0 directory parser that validates package metadata and lists NCA, ticket, certificate, and other entries without reading/decrypting NCA content.
 - Phase 10 initial CPU expansion: 32 modeled 128-bit FP/SIMD registers and scalar single/double FMOV, FADD, FSUB, FMUL, and FDIV instructions; advanced vector NEON and FP control remain unsupported.
+- Phase 11 CPU expansion: MOVN, ADR/ADRP, logical-immediate decoding, CSEL-family instructions, integer division, variable shifts, multiply-accumulate, and link-register branches. This remains a partial integer core.
 
 The LXP format is an original synthetic test container. It is not a Nintendo executable format and does not implement a guest operating system, syscalls, dynamic linking, or console services. See [docs/homebrew-format.md](docs/homebrew-format.md).
 

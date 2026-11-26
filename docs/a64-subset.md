@@ -7,11 +7,15 @@ LucidSwitch2 contains an independently written, deliberately incomplete A64 inte
 ## Implemented instructions
 
 - NOP
-- MOVZ and MOVK (32-bit and 64-bit forms)
+- MOVZ, MOVN and MOVK (32-bit and 64-bit forms)
+- ADR and ADRP PC-relative address generation
 - ADD/SUB (immediate) and ADDS/SUBS (immediate), including NZCV updates
 - ADD/SUB (shifted register) and flag-setting variants
-- AND, ORR, EOR, and ANDS (shifted register), including common MOV register alias encoding
-- B, B.cond, CBZ, and CBNZ
+- AND, ORR, EOR, and ANDS (shifted-register and logical-immediate forms), including common MOV register alias encoding
+- CSEL, CSINC, CSINV and CSNEG conditional-select instructions
+- UDIV/SDIV, LSLV/LSRV/ASRV/RORV, and MADD/MSUB
+- B, BL, B.cond, CBZ, and CBNZ
+- BR, BLR and RET
 - BR and RET
 - Unsigned-offset LDR and STR for 8-, 16-, 32-, and 64-bit values
 - MRS and MSR for the selected system-register bank (CurrentEL, DAIF, SPSel, and selected EL1 registers)
@@ -35,7 +39,7 @@ The CPU-visible memory facade can translate every byte either through the standa
 
 ## Not implemented
 
-This is still a small subset. Scalar FP arithmetic uses host IEEE single/double operations and does not model FPCR/FPSR, architectural rounding control, FP exception flags/traps, denormal modes, or full NaN behavior. No vector/NEON arithmetic, lane operations, vector loads/stores, or vector crypto are implemented. The interpreter also lacks exception entry/return completeness, full EL/security state, system-instruction traps, ASIDs, TTBR1, additional granule sizes, full TLB maintenance, caches, atomics, most A64 addressing modes, signed loads, exclusive accesses, and the complete instruction set. The stage-1 walker is not a complete ARMv8-A MMU and the interpreter is not sufficient to boot an operating system or commercial console software. Only the listed modeled system registers are decoded; all other encodings remain unsupported.
+This is still a small subset. Scalar FP arithmetic uses host IEEE single/double operations and does not model FPCR/FPSR, architectural rounding control, FP exception flags/traps, denormal modes, or full NaN behavior. No vector/NEON arithmetic, lane operations, vector loads/stores, or vector crypto are implemented. The interpreter also lacks exception entry/return completeness, full EL/security state, system-instruction traps, ASIDs, TTBR1, additional granule sizes, full TLB maintenance, caches, atomics/exclusives, most A64 addressing modes, signed loads, and the complete instruction set. The stage-1 walker is not a complete ARMv8-A MMU and the interpreter is not sufficient to boot an operating system or commercial console software. Only the listed modeled system registers are decoded; all other encodings remain unsupported.
 
 ## Test strategy
 

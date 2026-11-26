@@ -30,15 +30,17 @@ constexpr HardwareProfile kSwitch2{
     "Nintendo confirms custom NVIDIA processor; T239-level detail is community reverse-engineered"
 };
 
-constexpr std::array<CompatibilityFeature, 11U> kCommonFeatures{{
-    {"CPU", "AArch64 scalar interpreter", ImplementationStatus::Partial,
-     "Only a small documented instruction subset is implemented; no general game compatibility."},
+constexpr std::array<CompatibilityFeature, 12U> kCommonFeatures{{
+    {"CPU", "AArch64 scalar integer interpreter", ImplementationStatus::Partial,
+     "MOVN, ADR/ADRP, logical immediates, conditional selects, division, variable shifts, multiply-accumulate and linked branches are covered; the instruction set remains incomplete."},
     {"CPU", "Scalar S/D floating-point and FMOV", ImplementationStatus::Partial,
      "Scalar single/double arithmetic and bit-preserving FMOV are modeled; FPCR/FPSR, traps, and full precision control are not."},
     {"CPU", "Advanced SIMD/NEON vector execution", ImplementationStatus::NotImplemented,
      "Vector arithmetic, lane operations, vector loads/stores, and NEON crypto instructions are not implemented."},
     {"CPU", "Atomics, exclusives, and pointer authentication", ImplementationStatus::NotImplemented,
      "Required synchronization and target-specific PAC semantics are not implemented."},
+    {"System", "General Horizon process loader and runtime", ImplementationStatus::NotImplemented,
+     "The restricted NRO test loader is not a process manager and does not support general MOD0 relocation, NSO loading, launch arguments, or Horizon process state."},
     {"Memory", "Stage-1 address translation", ImplementationStatus::Partial,
      "One constrained 4 KiB / 48-bit TTBR0 regime; not a complete target MMU."},
     {"System", "Exception entry and SVC handling", ImplementationStatus::Partial,
