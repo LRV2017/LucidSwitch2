@@ -861,14 +861,15 @@ int main() {
     expect(cpu.step(exclusive_state, exclusive_memory) ==
                lucid::cpu::StepResult::Executed,
            "execute 64-bit LDXR before CLREX");
+    exclusive_state.program_counter = exclusive_code + 0x18U;
     expect(cpu.step(exclusive_state, exclusive_memory) ==
                lucid::cpu::StepResult::Executed,
            "execute CLREX and discard the reservation");
-    exclusive_state.program_counter = exclusive_code + 0x14U;
+    exclusive_state.program_counter = exclusive_code + 0x1CU;
     expect(cpu.step(exclusive_state, exclusive_memory) ==
                lucid::cpu::StepResult::Executed,
            "execute STXR after CLREX");
-    expect(exclusive_state.x[8] == 1U &&
+    expect(exclusive_state.x[11] == 1U &&
            read_u64() == 0x8877665544332211ULL,
            "STXR after CLREX fails without modifying memory");
 
