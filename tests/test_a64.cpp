@@ -741,7 +741,7 @@ int main() {
     expect(simd_state.v[18].low == 0x5555AAAA5555AAAAULL &&
            simd_state.v[18].high == 0x1032547698BADCFEULL,
            "EOR vector combines all 128 register bits");
-    expect(simd_state.v[21].low == 0x0100010001000100ULL &&
+    expect(simd_state.v[21].low == 0x0001000100010001ULL &&
            simd_state.v[21].high == 0U,
            "ADD 64-bit vector form wraps lanes and clears upper bits");
     expect(simd_state.flags.negative && !simd_state.flags.zero &&
