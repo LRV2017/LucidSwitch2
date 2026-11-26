@@ -607,6 +607,120 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
         return StepResult::Executed;
     }
 
+
+    // Integer LDP/STP register pairs: signed offset, pre-index and post-index.
+    // The SIMD/FP pair encoding (V=1) and non-temporal mode are not implemented.
+    if ((instruction & 0x3A000000U) == 0x28000000U) {
+        const bool vector_pair = (instruction & 0x04000000U) != 0U;
+        const unsigned opc = (instruction >> 30U) & 0x3U;
+        const bool load = (instruction & 0x00400000U) != 0U;
+        const unsigned mode = (instruction >> 23U) & 0x3U;
+        const unsigned target_first = instruction & 0x1FU;
+        const unsigned base_register = (instruction >> 5U) & 0x1FU;
+        const unsigned target_second = (instruction >> 10U) & 0x1FU;
+        const std::int64_t immediate =
+            sign_extend((instruction >> 15U) & 0x7FU, 7U);
+        if (vector_pair || (opc != 0U && opc != 1U && opc != 2U) ||
+            (opc == 1U && !load) || mode == 0U) {
+            return StepResult::UnsupportedInstruction;
+        }
+        if (load && target_first == target_second) {
+            return StepResult::UnsupportedInstruction;
+        }
+
+        const std::size_t element_size = opc == 2U ? 8U : 4U;
+        const std::size_t transfer_size = element_size * 2U;
+        const std::int64_t byte_displacement =
+            immediate * static_cast<std::int64_t>(element_size);
+        const std::uint64_t base = read_base_register(context, base_register);
+        std::uint64_t effective_address = base;
+        std::uint64_t writeback_value = base;
+        const bool writeback = mode == 1U || mode == 3U;
+
+        if (mode == 2U || mode == 3U) {
+            if (byte_displacement < 0) {
+                const std::uint64_t magnitude =
+                    static_cast<std::uint64_t>(-byte_displacement);
+                if (magnitude > base) return StepResult::MemoryFault;
+                effective_address = base - magnitude;
+            } else {
+                const std::uint64_t amount =
+                    static_cast<std::uint64_t>(byte_displacement);
+                if (base > std::numeric_limits<std::uint64_t>::max() - amount)
+                    return StepResult::MemoryFault;
+                effective_address = base + amount;
+            }
+            if (mode == 3U) writeback_value = effective_address;
+        } else { // post-index: transfer at the original base, then update it.
+            if (byte_displacement < 0) {
+                const std::uint64_t magnitude =
+                    static_cast<std::uint64_t>(-byte_displacement);
+                if (magnitude > base) return StepResult::MemoryFault;
+                writeback_value = base - magnitude;
+            } else {
+                const std::uint64_t amount =
+                    static_cast<std::uint64_t>(byte_displacement);
+                if (base > std::numeric_limits<std::uint64_t>::max() - amount)
+                    return StepResult::MemoryFault;
+                writeback_value = base + amount;
+            }
+        }
+
+        if (writeback && base_register != 31U &&
+            (base_register == target_first || base_register == target_second)) {
+            return StepResult::UnsupportedInstruction;
+        }
+
+        std::array<std::uint8_t, 16U> bytes{};
+        const auto transfer = std::span<std::uint8_t>(
+            bytes.data(), transfer_size);
+        if (load) {
+            if (!memory.read(effective_address, transfer))
+                return StepResult::MemoryFault;
+            for (unsigned index = 0U; index < 2U; ++index) {
+                const std::size_t offset =
+                    static_cast<std::size_t>(index) * element_size;
+                std::uint64_t value = 0U;
+                for (std::size_t byte = 0U; byte < element_size; ++byte)
+                    value |= static_cast<std::uint64_t>(bytes[offset + byte]) << (byte * 8U);
+                const unsigned destination =
+                    index == 0U ? target_first : target_second;
+                if (opc == 1U) {
+                    const auto signed_word = std::bit_cast<std::int32_t>(
+                        static_cast<std::uint32_t>(value));
+                    value = static_cast<std::uint64_t>(
+                        static_cast<std::int64_t>(signed_word));
+                    write_register(context, destination, value, true);
+                } else {
+                    write_register(context, destination, value, opc == 2U);
+                }
+            }
+        } else {
+            const std::array<unsigned, 2U> sources{target_first, target_second};
+            for (unsigned index = 0U; index < 2U; ++index) {
+                const std::uint64_t value =
+                    read_register(context, sources[index]) & width_mask(opc == 2U);
+                const std::size_t offset =
+                    static_cast<std::size_t>(index) * element_size;
+                for (std::size_t byte = 0U; byte < element_size; ++byte)
+                    bytes[offset + byte] =
+                        static_cast<std::uint8_t>((value >> (byte * 8U)) & 0xFFU);
+            }
+            const auto const_transfer = std::span<const std::uint8_t>(
+                bytes.data(), transfer_size);
+            if (!memory.write(effective_address, const_transfer))
+                return StepResult::MemoryFault;
+        }
+
+        if (writeback) {
+            if (base_register == 31U) context.sp = writeback_value;
+            else context.x[base_register] = writeback_value;
+        }
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
     // Unsigned-immediate scalar LDR/STR for byte, halfword, word and X-register sizes.
     // Register 31 is SP for the address base and XZR/WZR for transferred data.
     if ((instruction & 0x3B000000U) == 0x39000000U) {

@@ -462,6 +462,53 @@ int main() {
     expect(state.x[30] == base + 0x48U && state.program_counter == base + 0x60U,
            "BLR stores the following instruction address in X30");
 
+
+    // Integer paired loads/stores: offset, pre-index, and post-index modes.
+    // STP X3,X4,[X2,#16]; LDP X0,X1,[X2,#16]
+    write32(memory, base + 0xD0U, 0xA9011043U);
+    write32(memory, base + 0xD4U, 0xA9410440U);
+    // STP X5,X6,[X2,#-16]!; LDP X7,X8,[X2],#16
+    write32(memory, base + 0xD8U, 0xA9BF1845U);
+    write32(memory, base + 0xDCU, 0xA8812047U);
+    state = lucid::cpu::CpuContext{};
+    state.program_counter = base + 0xD0U;
+    state.x[2] = base + 0xB0U;
+    state.x[3] = 0x1122334455667788ULL;
+    state.x[4] = 0x8877665544332211ULL;
+    state.x[5] = 0xCAFEBABE12345678ULL;
+    state.x[6] = 0x0F1E2D3C4B5A6978ULL;
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute STP with signed-offset addressing");
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute LDP with signed-offset addressing");
+    expect(state.x[0] == state.x[3] && state.x[1] == state.x[4],
+           "LDP restores both 64-bit registers stored by STP");
+    expect(state.x[2] == base + 0xB0U,
+           "offset pair addressing leaves its base register unchanged");
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute STP with pre-index writeback");
+    expect(state.x[2] == base + 0xA0U,
+           "pre-index STP updates the base before the memory access");
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute LDP with post-index writeback");
+    expect(state.x[7] == state.x[5] && state.x[8] == state.x[6] &&
+           state.x[2] == base + 0xB0U,
+           "post-index LDP loads the pair then advances its base");
+
+    // A paired load whose second half crosses the mapping boundary faults atomically.
+    write32(memory, base + 0xE0U, 0xA9410440U); // LDP X0,X1,[X2,#16]
+    state.program_counter = base + 0xE0U;
+    state.x[2] = base + 0xF0U;
+    state.x[0] = 0xAAAAU;
+    state.x[1] = 0xBBBBU;
+    const auto pair_fault_retired = state.instructions_retired;
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::MemoryFault,
+           "report an out-of-range pair load");
+    expect(state.x[0] == 0xAAAAU && state.x[1] == 0xBBBBU &&
+           state.program_counter == base + 0xE0U &&
+           state.instructions_retired == pair_fault_retired,
+           "faulting LDP leaves both destination registers and PC unchanged");
+
     if (failures != 0) {
         std::cerr << failures << " A64 test(s) failed.\n";
         return 1;

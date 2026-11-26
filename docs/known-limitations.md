@@ -110,3 +110,9 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 - The loader validates a MOD0 header, BSS start/end offsets, and a bounded DT_* table.
 - RELA supports only R_AARCH64_NONE and symbol-free R_AARCH64_RELATIVE. RELR supports bounded relative pointer adjustments.
 - Symbol-based relocations, PLT/GOT symbol resolution, imported modules, versioning, exception metadata, RELRO permission transitions, and LNY extension behavior are not implemented.
+
+
+## AArch64 integer pair memory operations
+
+- Integer LDP/STP supports W/X pairs with signed-offset, pre-index, and post-index addressing. SIMD/FP pair loads/stores and non-temporal pair forms remain unsupported.
+- Pair accesses use one bounded memory operation; faulting loads leave destination registers and writeback state unchanged. The wider load/store instruction family is still incomplete.
