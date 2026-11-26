@@ -19,7 +19,7 @@ int main(){using namespace lucid;
  arch::SystemRegisters regs;check(regs.write(arch::SystemRegister::VBAR_EL1,0x8000)==arch::RegisterAccess::Ok,"write VBAR");
  check(regs.write(arch::SystemRegister::CurrentEL,1)==arch::RegisterAccess::ReadOnly,"protect CurrentEL");
  arch::ExceptionRouter router;auto vector=router.enter(regs,{arch::ExceptionKind::IRQ,1,0x1234,0x55,0xABC});
- check(vector==0xA80,"calculate EL1 IRQ vector");check(regs.read(arch::SystemRegister::ELR_EL1)==0x1234&&regs.read(arch::SystemRegister::FAR_EL1)==0xABC,"capture exception state");
+ check(vector==0x8280,"calculate EL1 IRQ vector");check(regs.read(arch::SystemRegister::ELR_EL1)==0x1234&&regs.read(arch::SystemRegister::FAR_EL1)==0xABC,"capture exception state");
  devices::InterruptController irq;check(irq.raise(7)&&irq.set_enabled(7,true)&&irq.pending(7),"raise enabled interrupt");
  unsigned id=99;check(irq.acknowledge(id)&&id==7&&!irq.pending(7),"acknowledge interrupt");check(!irq.raise(64),"reject invalid interrupt id");
  devices::VirtualTimer timer;timer.set_compare(10);timer.set_enabled(true);timer.advance(9);check(!timer.interrupt_pending(),"timer before compare");timer.advance(1);check(timer.interrupt_pending(),"timer at compare");timer.acknowledge();check(!timer.interrupt_pending(),"acknowledge timer");
