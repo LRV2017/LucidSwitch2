@@ -25,8 +25,11 @@ An experimental, clean-room emulator research project focused on building a lawf
 - Graphics pipeline foundation: indexed geometry, triangle rasterization, color/depth attachments, texture resources with nearest/linear sampling, and validated guest GPU commands.
 - Phase 7 native graphics execution: an optional Vulkan vertex/fragment pipeline with GPU vertex/index buffers, device-local sampled texture images, descriptor sets, depth-tested rendering, off-screen readback, and an SDL2 Vulkan swapchain presentation path.
 - Phase 6 homebrew test environment: a bounded LXP package reader/writer, metadata inspection, CRC-32 validation, safe segment sizing, an instruction-budgeted runner, and an original A64 register demo.
+- Phase 8 compatibility research foundation: separate original-Switch and Switch 2 architecture profiles, a read-only plaintext NRO0/NSO0 metadata inspector, and target-specific compatibility-gap reports.
 
 The LXP format is an original synthetic test container. It is not a Nintendo executable format and does not implement a guest operating system, syscalls, dynamic linking, or console services. See [docs/homebrew-format.md](docs/homebrew-format.md).
+
+The Phase 8 executable inspector is read-only and only recognizes plaintext original-Switch NRO0/NSO0 metadata. It does not load or launch games, process NCA containers, decrypt, decompress, relocate, or provide Horizon OS services. Switch 2 has a separate hardware profile; the original-Switch file inspector is not Switch 2 support. See [docs/switch-architecture.md](docs/switch-architecture.md) and [docs/switch-executable-inspection.md](docs/switch-executable-inspection.md).
 
 The graphics path is a clean-room renderer foundation, not Switch 2 GPU emulation. When Vulkan and glslc are available, the native backend executes the project's own vertex and fragment shaders, consumes Vulkan vertex/index buffers, samples device-local texture images, performs depth-tested rendering, and reads back the completed off-screen image. With SDL2, it can present by blitting the GPU target into a real Vulkan swapchain. The CPU reference renderer remains the portable fallback. The Vulkan path currently uses synchronous queue waits and a single fixed shader pair; it does not translate console shaders or implement console GPU commands. See [docs/gpu-foundation.md](docs/gpu-foundation.md).
 
@@ -54,6 +57,8 @@ Requirements:
     .\build\Release\lucidswitch2.exe --graphics-demo --vulkan
     .\build\Release\lucidswitch2.exe --graphics-demo --window --vulkan
     .\build\Release\lucidswitch2.exe --create-homebrew-sample .\build\register_demo.lxp
+    .\build\Release\lucidswitch2.exe --compat-report all
+    .\build\Release\lucidswitch2.exe --inspect-switch-executable .\homebrew.nro
     .\build\Release\lucidswitch2.exe --inspect-homebrew .\build\register_demo.lxp
     .\build\Release\lucidswitch2.exe --run-homebrew .\build\register_demo.lxp 3
 
@@ -70,6 +75,8 @@ Requirements:
     ./build/lucidswitch2 --graphics-demo --vulkan
     ./build/lucidswitch2 --graphics-demo --window --vulkan
     ./build/lucidswitch2 --create-homebrew-sample ./build/register_demo.lxp
+    ./build/lucidswitch2 --compat-report all
+    ./build/lucidswitch2 --inspect-switch-executable ./homebrew.nro
     ./build/lucidswitch2 --inspect-homebrew ./build/register_demo.lxp
     ./build/lucidswitch2 --run-homebrew ./build/register_demo.lxp 3
 
@@ -81,16 +88,28 @@ Open frontend/index.html in a modern browser to preview the console-inspired hom
 
 ## Roadmap
 
-1. Host foundation: build system, memory primitives, CPU execution loop, lifecycle, diagnostics, and CI.
-2. CPU research: validate more A64 instruction groups using public specifications and differential test vectors.
-3. Architecture research: document publicly observable hardware requirements and define testable interfaces.
-4. System emulation: add documented exceptions, system registers, memory translation, timers, interrupts, and device abstractions.
-5. Graphics foundation: indexed geometry, depth framebuffer, texture and sampler resources, guest command buffers, and optional desktop preview.
-6. Homebrew test environment: original LXP package format, bounded loading/execution, sample programs, and malformed-package tests.
-7. Native graphics execution: native Vulkan shader pipeline, GPU-side geometry/textures, off-screen readback, and optional SDL2 swapchain presentation. The fixed sample pipeline is implemented; broader guest shader and console GPU work remains open.
-8. Compatibility research: only after the above, investigate legally obtained user-provided software and publish reproducible results.
+The first eight phases establish the project and its initial compatibility research foundation. Running original Switch and Switch 2 software requires additional, target-specific engineering phases; it is not complete at Phase 8.
 
-Phases 6 and 7 do not make the project a console emulator. LXP provides a reproducible original program format for the CPU and loader; Phase 7 provides a native host graphics pipeline for original test geometry and textures, not console GPU compatibility.
+1. Host foundation: build system, memory primitives, CPU execution loop, lifecycle, diagnostics, and CI.
+2. CPU research: validate A64 instruction groups using public specifications and differential test vectors.
+3. Architecture research: document hardware requirements and define testable interfaces.
+4. System foundation: selected exceptions, system registers, memory translation, timers, interrupts, and device abstractions.
+5. Graphics foundation: indexed geometry, depth framebuffer, textures, guest test commands, and desktop preview.
+6. Homebrew test environment: original LXP format, bounded loading/execution, sample programs, and malformed-package tests.
+7. Native graphics execution: native Vulkan shader pipeline, GPU-side geometry/textures, off-screen readback, and optional SDL2 swapchain presentation.
+8. Compatibility research baseline: separate original-Switch and Switch 2 target profiles, plaintext NRO0/NSO0 metadata inspection, architecture documentation, and explicit compatibility-gap reports.
+9. Homebrew image loading: load carefully scoped, uncompressed, self-contained original-Switch homebrew images with page permissions and a documented entry ABI.
+10. CPU completion work: SIMD/NEON, floating point, atomics/exclusives, broader exception handling, and target-specific CPU extensions.
+11. Kernel/process model: address-space management, SVC ABI, process/thread state, scheduler, handles, TLS, synchronization, and timers.
+12. Horizon IPC and services: HIPC/CMIF framing, sessions/domains, service-manager behavior, and selected documented homebrew-facing services.
+13. Platform services: filesystem, content access, input, audio, display, and application lifecycle.
+14. Original Switch graphics emulation: research and implement a separate guest GPU command processor, shader translation, memory layouts, and synchronization path.
+15. Switch 2 architecture and graphics: implement and validate Switch 2-specific CPU, memory, OS, and GPU behavior independently from the original Switch.
+16. Compatibility laboratory: reproducible test corpus, homebrew test suites, per-title diagnostics, and performance profiling.
+
+Later phases remain conditional on test evidence. No phase guarantees that every commercial title can be made compatible. Protected retail content is not a deliverable of the current Phase 8 work.
+
+Phase 8 does not make the project a console emulator. It establishes separate hardware profiles, an original-Switch executable metadata inspector, and a testable map of what still must be implemented for either target.
 
 ## Contributing
 

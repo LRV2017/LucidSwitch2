@@ -17,6 +17,8 @@ LucidSwitch2 is an early clean-room emulator research project. Its host-side cor
 - Software graphics backend (lucid::gpu::SoftwareBackend): deterministic reference triangle rasterizer, depth testing, texture sampling, and readback.
 - Native graphics backend (lucid::gpu::VulkanBackend): Vulkan graphics pipeline, vertex/index buffers, sampled device-local texture images, color/depth render targets, shader execution, and readback; optional SDL2 swapchain presentation blits the completed GPU target to the acquired swapchain image.
 - Desktop software presenter (lucid::gpu::WindowPresenter): optional SDL2 preview for CPU reference framebuffer readbacks.
+- Switch executable inspector (lucid::switchfmt): bounded plaintext NRO0/NSO0 metadata and segment-range parser; no loading or execution.
+- Compatibility inventory (lucid::switchfmt): separate original-Switch and Switch 2 target profiles and an explicit implementation-status report.
 
 ## Design constraints
 

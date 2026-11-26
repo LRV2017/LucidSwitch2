@@ -86,3 +86,18 @@ jobs:
           printf '%s\n' "$RUN_OUTPUT" | grep -qi 'X0: 0x2a'
           printf '%s\n' "$RUN_OUTPUT" | grep -qi 'X1: 0xc0de'
         shell: bash
+
+      - name: Verify original Switch and Switch 2 compatibility reports
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            LUCID_BIN="./build/Release/lucidswitch2.exe"
+          else
+            LUCID_BIN="./build/lucidswitch2"
+          fi
+          "$LUCID_BIN" --compat-report switch
+          "$LUCID_BIN" --compat-report switch2
+          "$LUCID_BIN" --compat-report all > build/compatibility-report.txt
+          grep -q 'Nintendo Switch (original family)' build/compatibility-report.txt
+          grep -q 'Nintendo Switch 2' build/compatibility-report.txt
+          grep -q 'no commercial Switch or Switch 2 game' build/compatibility-report.txt
+        shell: bash

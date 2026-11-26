@@ -3,6 +3,8 @@
 #include "lucid/gpu/software_backend.hpp"
 #include "lucid/gpu/window_presenter.hpp"
 #include "lucid/homebrew/package.hpp"
+#include "lucid/switch/executable.hpp"
+#include "lucid/switch/compatibility.hpp"
 
 #include <algorithm>
 #include <array>
@@ -18,7 +20,7 @@
 #include <vector>
 
 namespace {
-constexpr const char* kVersion = "0.11.0";
+constexpr const char* kVersion = "0.12.0";
 constexpr std::uint64_t kDemoBase = 0x1000U;
 constexpr std::uint64_t kDemoInstructionBudget = 16U;
 constexpr std::uint64_t kDefaultHomebrewBudget = 100000U;
@@ -40,6 +42,8 @@ void print_help() {
         << "  lucidswitch2 --graphics-demo [--window] [--vulkan]  Render an original test scene\n"
         << "  lucidswitch2 --create-homebrew-sample <output.lxp>\n"
         << "  lucidswitch2 --inspect-homebrew <program.lxp>\n"
+        << "  lucidswitch2 --inspect-switch-executable <program.nro|program.nso>\n"
+        << "  lucidswitch2 --compat-report <switch|switch2|all>\n"
         << "  lucidswitch2 --run-homebrew <program.lxp> [instruction-budget]\n\n"
         << "LXP is an original synthetic test format. No commercial console games are loaded.\n";
 }
@@ -311,6 +315,76 @@ int inspect_homebrew(const std::filesystem::path& path) {
     return 0;
 }
 
+int inspect_switch_executable(const std::filesystem::path& path) {
+    lucid::switchfmt::ExecutableInfo info{};
+    std::string error;
+    if (!lucid::switchfmt::inspect_executable_file(path, info, &error)) {
+        std::cerr << "Switch executable inspection failed: " << error << "\n";
+        return 1;
+    }
+
+    std::cout << "Executable format: " << lucid::switchfmt::to_string(info.format) << "\n"
+              << "Version: " << info.version << "\n"
+              << "Flags: 0x" << std::hex << info.flags << std::dec << "\n"
+              << "Input bytes: " << info.input_size << "\n"
+              << "BSS bytes: " << info.bss_size << "\n";
+    if (info.format == lucid::switchfmt::ExecutableFormat::Nro0) {
+        std::cout << "Declared image bytes: " << info.declared_image_size << "\n";
+        std::cout << "NRO-start module-header version/padding: "
+                  << info.module_header_version << "\n"
+                  << "MOD0 header offset: 0x" << std::hex
+                  << info.module_header_location << std::dec << "\n"
+                  << "Module-version offset: 0x" << std::hex
+                  << info.module_version_offset << std::dec << "\n"
+                  << "Additional header offset: 0x" << std::hex
+                  << info.additional_header_offset << std::dec << "\n"
+                  << "ASET assets: " << (info.has_asset_section ? "present" : "not detected") << "\n";
+    }
+    if (info.uses_zstd_compression)
+        std::cout << "Compression: Zstd-based NSO segments are declared\n";
+
+    std::cout << "Build ID: ";
+    for (const std::uint8_t byte : info.build_id) {
+        std::cout << std::hex << std::setw(2) << std::setfill('0')
+                  << static_cast<unsigned>(byte);
+    }
+    std::cout << std::dec << std::setfill(' ') << "\n";
+
+    for (const auto& segment : info.segments) {
+        std::cout << lucid::switchfmt::to_string(segment.kind)
+                  << ": file=0x" << std::hex << segment.file_offset
+                  << " stored=0x" << segment.stored_size
+                  << " memory=0x" << segment.memory_offset
+                  << " size=0x" << segment.memory_size << std::dec
+                  << " compressed=" << (segment.compressed ? "yes" : "no")
+                  << " hash-check=" << (segment.hash_required ? "yes" : "no")
+                  << " execute-only=" << (segment.execute_only ? "yes" : "no")
+                  << "\n";
+    }
+    std::cout << "Trailing bytes: " << info.trailing_bytes << "\n"
+              << "Inspection only: no decryption, decompression, relocation, loading, or execution was performed.\n"
+              << "NRO0/NSO0 metadata describes original Switch executable containers; it does not establish Switch 2 retail compatibility.\n";
+    return 0;
+}
+
+int run_compatibility_report(const std::string_view target) {
+    using lucid::switchfmt::HardwareTarget;
+    if (target == "switch" || target == "all") {
+        lucid::switchfmt::write_compatibility_report(
+            HardwareTarget::OriginalSwitch, std::cout);
+        if (target == "all") std::cout << "\n";
+    }
+    if (target == "switch2" || target == "all") {
+        lucid::switchfmt::write_compatibility_report(
+            HardwareTarget::Switch2, std::cout);
+    }
+    if (target != "switch" && target != "switch2" && target != "all") {
+        std::cerr << "Target must be switch, switch2, or all.\n";
+        return 2;
+    }
+    return 0;
+}
+
 int run_homebrew(const std::filesystem::path& path,
                  const std::uint64_t instruction_budget) {
     lucid::homebrew::ProgramPackage program;
@@ -429,6 +503,20 @@ int main(int argc, char* argv[]) {
             return 2;
         }
         return inspect_homebrew(argv[2]);
+    }
+    if (command == "--inspect-switch-executable") {
+        if (argc != 3) {
+            std::cerr << "Usage: --inspect-switch-executable <program.nro|program.nso>\n";
+            return 2;
+        }
+        return inspect_switch_executable(argv[2]);
+    }
+    if (command == "--compat-report") {
+        if (argc != 3) {
+            std::cerr << "Usage: --compat-report <switch|switch2|all>\n";
+            return 2;
+        }
+        return run_compatibility_report(argv[2]);
     }
     if (command == "--run-homebrew") {
         if (argc < 3 || argc > 4) {

@@ -38,3 +38,16 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 - No relocations, dynamic linking, imported functions, syscalls, filesystem access, threads, GPU APIs, guest OS, or system services are implemented.
 - The runner executes only the documented A64 subset and pauses at a host instruction budget; it does not provide a program exit syscall or commercial-game compatibility.
 - CRC-32 detects accidental payload corruption but does not authenticate a package or prove its origin.
+
+
+## Phase 8 compatibility research
+
+- The NRO0/NSO0 inspector reads plaintext metadata only. It is not a loader and does not decompress, hash-verify, relocate, dynamically link, map, or execute a title.
+- NRO inspection currently supports the classic uncompressed file-offset layout; compressed/extended NRO variants are rejected.
+- NSO compression, hash-check, execute-only, and Zstd flags are reported, but the segment contents are not decompressed or hash-verified.
+- No NCA content archive parser or encrypted content processing is implemented.
+- No production keys or title keys are stored, retrieved, derived, or used.
+- Original Switch and Switch 2 have distinct compatibility profiles. Parsing an original-Switch NRO0 or NSO0 header is not Switch 2 support.
+- There is no Horizon OS process runtime, full SVC ABI, scheduler, HIPC/CMIF service stack, filesystem service, audio/input/display service set, or target GPU command processor.
+- The Vulkan renderer is a host renderer for original LucidSwitch2 test geometry. It does not emulate Maxwell or Ampere guest GPU commands or shaders.
+- No commercial Switch or Switch 2 game is currently loadable or claimed compatible.

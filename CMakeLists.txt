@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(LucidSwitch2 VERSION 0.11.0
+project(LucidSwitch2 VERSION 0.12.0
     DESCRIPTION "Clean-room console emulation research scaffold"
     LANGUAGES CXX
 )
@@ -37,6 +37,8 @@ add_library(lucid_core
     src/gpu/vulkan_backend.cpp
     src/gpu/window_presenter.cpp
     src/homebrew/package.cpp
+    src/switch/executable.cpp
+    src/switch/compatibility.cpp
 )
 
 target_include_directories(lucid_core PUBLIC
@@ -129,6 +131,8 @@ if(LUCID_BUILD_TESTS)
         lucid_exception_tests
         lucid_gpu_tests
         lucid_homebrew_tests
+        lucid_switch_format_tests
+        lucid_compatibility_tests
     )
 
     add_executable(lucid_tests tests/test_main.cpp)
@@ -137,6 +141,8 @@ if(LUCID_BUILD_TESTS)
     add_executable(lucid_exception_tests tests/test_exceptions.cpp)
     add_executable(lucid_gpu_tests tests/test_gpu.cpp)
     add_executable(lucid_homebrew_tests tests/test_homebrew.cpp)
+    add_executable(lucid_switch_format_tests tests/test_switch_formats.cpp)
+    add_executable(lucid_compatibility_tests tests/test_compatibility.cpp)
 
     foreach(test_target IN LISTS LUCID_TEST_TARGETS)
         target_link_libraries(${test_target} PRIVATE lucid_core)
@@ -155,4 +161,6 @@ if(LUCID_BUILD_TESTS)
     add_test(NAME lucid_exception_tests COMMAND lucid_exception_tests)
     add_test(NAME lucid_gpu_tests COMMAND lucid_gpu_tests)
     add_test(NAME lucid_homebrew_tests COMMAND lucid_homebrew_tests)
+    add_test(NAME lucid_switch_format_tests COMMAND lucid_switch_format_tests)
+    add_test(NAME lucid_compatibility_tests COMMAND lucid_compatibility_tests)
 endif()
