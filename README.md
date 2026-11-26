@@ -51,7 +51,7 @@ ctest --test-dir build --output-on-failure
 
 The --run command executes a tiny synthetic branch-loop demo for a bounded number of instructions. It does not load a game.
 
-## Roadmap
+## Frontend prototype\n\nOpen `frontend/index.html` in a modern browser to preview the console-inspired home screen, game library, settings, local metadata-only import flow, and basic controller detection. This is not yet a native desktop application and cannot launch imported files.\n\n## Phase 2 architecture components\n\nThe repository includes initial standalone models for selected system registers and EL1 exception vector routing, explicit 4 KiB address translation, a deterministic virtual timer, a 64-source interrupt controller, and an MMIO device bus. These are building blocks, not a complete ARMv8 implementation or fully integrated console hardware model. See `docs/phase-2-architecture.md`.\n\n## Roadmap
 
 1. Host foundation: build system, memory primitives, CPU execution loop, lifecycle, diagnostics, and CI.
 2. CPU research: validate more A64 instruction groups using public specifications and differential test vectors.

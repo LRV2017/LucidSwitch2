@@ -35,3 +35,8 @@ The instruction budget is a host safety mechanism, not a guest timing model.
 ## Next engineering milestone
 
 Build a proper decoder/test corpus and add broader, specification-backed A64 coverage. After CPU correctness work, add documented system-register, exception, MMU, memory-ordering, and device interfaces before console-specific work.
+
+
+## Phase 2 components
+
+See [phase-2-architecture.md](phase-2-architecture.md) for the system-register, exception, address-space, timer, interrupt, MMIO, and frontend prototype status. These components are not yet fully wired into the A64 execution path.
