@@ -16,3 +16,6 @@ LucidSwitch2 does not download game packages or keys from ROMSLAB. The site is n
 - Nintendo official Switch 2 specifications: https://www.nintendo.com/us/gaming-systems/switch-2/tech-specs/
 
 Use the official manufacturer specifications for official claims. Mark reverse-engineered implementation detail as community research. A format reference does not by itself establish loader compatibility.
+
+- SwitchBrew NCA/PFS0 layout: https://switchbrew.org/wiki/NCA
+- ReverseEngineering Wiki PFS0/HFS0 overview: https://reverseengineering.wiki/index.php/Format:PFS0_and_HFS0

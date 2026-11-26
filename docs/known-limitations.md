@@ -64,3 +64,12 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 - No loader configuration entries, system-call implementation, process/thread manager, HIPC/CMIF, filesystem, input, audio, display, or guest GPU are provided.
 - An instruction-budget stop proves only that this small program ran for the requested number of instructions; it is not evidence of game compatibility.
 - Protected NSP/XCI/NCA content and production/title-key decryption are not supported.
+
+
+## NSP package import
+
+- NSP import validates only the PFS0 directory metadata and the filenames/ranges of its entries.
+- NCA, ticket, and certificate payloads are not read or extracted. The parser classifies them by filename and size only.
+- NCA headers and protected sections are not decrypted or parsed; production/title keys are not imported or used.
+- Every imported package remains marked not launchable. The runtime and guest systems required by a Switch title are not implemented.
+- The frontend accepts `.nsp` files and persists a local summary only; it does not retain/upload package bytes.

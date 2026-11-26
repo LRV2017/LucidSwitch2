@@ -27,10 +27,11 @@ An experimental, clean-room emulator research project focused on building a lawf
 - Phase 6 homebrew test environment: a bounded LXP package reader/writer, metadata inspection, CRC-32 validation, safe segment sizing, an instruction-budgeted runner, and an original A64 register demo.
 - Phase 8 compatibility research foundation: separate original-Switch and Switch 2 architecture profiles, a read-only plaintext NRO0/NSO0 metadata inspector, and target-specific compatibility-gap reports.
 - Phase 9 restricted homebrew execution prototype: a bounded loader for a deliberately small subset of plaintext, uncompressed original-Switch NRO files with a direct entry branch and no MOD0/dynamic-linking metadata.
+- NSP package import: a read-only PFS0 directory parser that validates package metadata and lists NCA, ticket, certificate, and other entries without reading/decrypting NCA content.
 
 The LXP format is an original synthetic test container. It is not a Nintendo executable format and does not implement a guest operating system, syscalls, dynamic linking, or console services. See [docs/homebrew-format.md](docs/homebrew-format.md).
 
-The Phase 8 executable inspector recognizes plaintext original-Switch NRO0/NSO0 metadata. Phase 9 adds a very restricted original-Switch NRO execution prototype, but only for a direct branch-to-text image with no MOD0 header/dynamic relocations. It uses the incomplete A64 interpreter and has no Horizon OS, syscalls, imports, threads, or console GPU, so ordinary homebrew applications and commercial games are not expected to run. It does not process NCA containers or protected content. Switch 2 remains a separate research target with no executable loader. See [docs/switch-architecture.md](docs/switch-architecture.md), [docs/switch-executable-inspection.md](docs/switch-executable-inspection.md), and [docs/restricted-nro-homebrew-runner.md](docs/restricted-nro-homebrew-runner.md). Research-source notes, including the supplied ROMSLAB link, are in [docs/research-sources.md](docs/research-sources.md).
+LucidSwitch2 accepts `.nsp` packages for read-only PFS0 directory inspection through `--inspect-nsp`. The library UI also accepts `.nsp` files, validates the PFS0 file table and data ranges locally, and summarizes package entries. Phase 9 adds a very restricted original-Switch NRO execution prototype, but only for a direct branch-to-text image with no MOD0 header/dynamic relocations. It uses the incomplete A64 interpreter and has no Horizon OS, syscalls, imports, threads, or console GPU, so ordinary homebrew applications and commercial games are not expected to run. It does not process NCA containers or protected content. Switch 2 remains a separate research target with no executable loader. See [docs/switch-architecture.md](docs/switch-architecture.md), [docs/switch-executable-inspection.md](docs/switch-executable-inspection.md), [docs/restricted-nro-homebrew-runner.md](docs/restricted-nro-homebrew-runner.md), and [docs/nsp-package-import.md](docs/nsp-package-import.md). Research-source notes, including the supplied ROMSLAB link, are in [docs/research-sources.md](docs/research-sources.md).
 
 The graphics path is a clean-room renderer foundation, not Switch 2 GPU emulation. When Vulkan and glslc are available, the native backend executes the project's own vertex and fragment shaders, consumes Vulkan vertex/index buffers, samples device-local texture images, performs depth-tested rendering, and reads back the completed off-screen image. With SDL2, it can present by blitting the GPU target into a real Vulkan swapchain. The CPU reference renderer remains the portable fallback. The Vulkan path currently uses synchronous queue waits and a single fixed shader pair; it does not translate console shaders or implement console GPU commands. See [docs/gpu-foundation.md](docs/gpu-foundation.md).
 
@@ -59,6 +60,7 @@ Requirements:
     .\build\Release\lucidswitch2.exe --graphics-demo --window --vulkan
     .\build\Release\lucidswitch2.exe --create-homebrew-sample .\build\register_demo.lxp
     .\build\Release\lucidswitch2.exe --compat-report all
+    .\build\Release\lucidswitch2.exe --inspect-nsp .\your-game.nsp
     .\build\Release\lucidswitch2.exe --inspect-switch-executable .\homebrew.nro
     .\build\Release\lucidswitch2.exe --run-nro .\minimal-homebrew.nro 1000
     .\build\Release\lucidswitch2.exe --inspect-homebrew .\build\register_demo.lxp
@@ -78,6 +80,7 @@ Requirements:
     ./build/lucidswitch2 --graphics-demo --window --vulkan
     ./build/lucidswitch2 --create-homebrew-sample ./build/register_demo.lxp
     ./build/lucidswitch2 --compat-report all
+    ./build/lucidswitch2 --inspect-nsp ./your-game.nsp
     ./build/lucidswitch2 --inspect-switch-executable ./homebrew.nro
     ./build/lucidswitch2 --run-nro ./minimal-homebrew.nro 1000
     ./build/lucidswitch2 --inspect-homebrew ./build/register_demo.lxp

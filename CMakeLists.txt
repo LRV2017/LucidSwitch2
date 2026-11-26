@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(LucidSwitch2 VERSION 0.13.0
+project(LucidSwitch2 VERSION 0.14.0
     DESCRIPTION "Clean-room console emulation research scaffold"
     LANGUAGES CXX
 )
@@ -40,6 +40,7 @@ add_library(lucid_core
     src/switch/executable.cpp
     src/switch/compatibility.cpp
     src/switch/homebrew_loader.cpp
+    src/switch/nsp_package.cpp
 )
 
 target_include_directories(lucid_core PUBLIC
@@ -135,6 +136,7 @@ if(LUCID_BUILD_TESTS)
         lucid_switch_format_tests
         lucid_compatibility_tests
         lucid_nro_loader_tests
+        lucid_nsp_package_tests
     )
 
     add_executable(lucid_tests tests/test_main.cpp)
@@ -146,6 +148,7 @@ if(LUCID_BUILD_TESTS)
     add_executable(lucid_switch_format_tests tests/test_switch_formats.cpp)
     add_executable(lucid_compatibility_tests tests/test_compatibility.cpp)
     add_executable(lucid_nro_loader_tests tests/test_nro_loader.cpp)
+    add_executable(lucid_nsp_package_tests tests/test_nsp_package.cpp)
 
     foreach(test_target IN LISTS LUCID_TEST_TARGETS)
         target_link_libraries(${test_target} PRIVATE lucid_core)
@@ -167,4 +170,5 @@ if(LUCID_BUILD_TESTS)
     add_test(NAME lucid_switch_format_tests COMMAND lucid_switch_format_tests)
     add_test(NAME lucid_compatibility_tests COMMAND lucid_compatibility_tests)
     add_test(NAME lucid_nro_loader_tests COMMAND lucid_nro_loader_tests)
+    add_test(NAME lucid_nsp_package_tests COMMAND lucid_nsp_package_tests)
 endif()

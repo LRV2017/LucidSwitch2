@@ -6,6 +6,7 @@
 #include "lucid/switch/executable.hpp"
 #include "lucid/switch/compatibility.hpp"
 #include "lucid/switch/homebrew_loader.hpp"
+#include "lucid/switch/nsp_package.hpp"
 
 #include <algorithm>
 #include <array>
@@ -21,7 +22,7 @@
 #include <vector>
 
 namespace {
-constexpr const char* kVersion = "0.13.0";
+constexpr const char* kVersion = "0.14.0";
 constexpr std::uint64_t kDemoBase = 0x1000U;
 constexpr std::uint64_t kDemoInstructionBudget = 16U;
 constexpr std::uint64_t kDefaultHomebrewBudget = 100000U;
@@ -45,6 +46,7 @@ void print_help() {
         << "  lucidswitch2 --inspect-homebrew <program.lxp>\n"
         << "  lucidswitch2 --inspect-switch-executable <program.nro|program.nso>\n"
         << "  lucidswitch2 --compat-report <switch|switch2|all>\n"
+        << "  lucidswitch2 --inspect-nsp <game.nsp>\n"
         << "  lucidswitch2 --run-nro <homebrew.nro> [instruction-budget]\n"
         << "  lucidswitch2 --run-homebrew <program.lxp> [instruction-budget]\n\n"
         << "NRO execution is restricted to minimal plaintext homebrew; no Horizon OS, imports, relocations, or commercial games.\n"
@@ -368,6 +370,36 @@ int inspect_switch_executable(const std::filesystem::path& path) {
     return 0;
 }
 
+int inspect_nsp_package(const std::filesystem::path& path) {
+    lucid::switchfmt::NspPackageInfo info{};
+    std::string error;
+    if (!lucid::switchfmt::inspect_nsp_file(path, info, &error)) {
+        std::cerr << "NSP import failed: " << error << "\n";
+        return 1;
+    }
+
+    std::cout << "NSP package recognized (PFS0 directory valid)\n"
+              << "Package bytes: " << info.package_size << "\n"
+              << "Directory entries: " << info.file_count << "\n"
+              << "NCA files: " << info.nca_count << "\n"
+              << "CNMT-named NCA files: " << info.metadata_nca_count << "\n"
+              << "Ticket files: " << info.ticket_count << "\n"
+              << "Certificate files: " << info.certificate_count << "\n"
+              << "Other files: " << info.other_file_count << "\n"
+              << "PFS0 file-data offset: 0x" << std::hex
+              << info.pfs0_data_offset << std::dec << "\n";
+
+    std::cout << "Package contents:\n";
+    for (const auto& file : info.files) {
+        std::cout << "  " << file.name << " (" << file.size << " bytes)\n";
+    }
+
+    std::cout << "\nRecognized container only. NCA contents were not read or decrypted.\n"
+              << "Not launchable: protected content handling, application loading, Horizon services, and guest GPU emulation are not implemented.\n"
+              << "No ticket/title-key material was extracted or processed.\n";
+    return 0;
+}
+
 int run_nro_homebrew(const std::filesystem::path& path,
                      const std::uint64_t instruction_budget) {
     lucid::switchfmt::NroHomebrewRunReport report{};
@@ -535,6 +567,13 @@ int main(int argc, char* argv[]) {
             return 2;
         }
         return inspect_homebrew(argv[2]);
+    }
+    if (command == "--inspect-nsp") {
+        if (argc != 3) {
+            std::cerr << "Usage: --inspect-nsp <game.nsp>\n";
+            return 2;
+        }
+        return inspect_nsp_package(argv[2]);
     }
     if (command == "--inspect-switch-executable") {
         if (argc != 3) {

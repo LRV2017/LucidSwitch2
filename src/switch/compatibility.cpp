@@ -65,6 +65,12 @@ constexpr CompatibilityFeature kSwitch2ExecutableFeature{
     "No Switch 2 retail package parser, authenticated loader, or application runtime."
 };
 
+constexpr CompatibilityFeature kNspPackageFeature{
+    "Container", "NSP/PFS0 directory inspection",
+    ImplementationStatus::MetadataOnly,
+    "Validates the PFS0 directory and lists NCA/ticket/certificate filenames only. Does not parse/decrypt NCA content or launch titles."
+};
+
 constexpr CompatibilityFeature kRestrictedNroFeature{
     "Executable", "Restricted plaintext NRO homebrew execution",
     ImplementationStatus::Partial,
@@ -117,6 +123,7 @@ void write_compatibility_report(const HardwareTarget target, std::ostream& outpu
     for (const auto& feature : kCommonFeatures) print_feature(feature, output);
     if (target == HardwareTarget::OriginalSwitch) {
         print_feature(kOriginalExecutableFeature, output);
+        print_feature(kNspPackageFeature, output);
         print_feature(kRestrictedNroFeature, output);
     } else {
         print_feature(kSwitch2ExecutableFeature, output);

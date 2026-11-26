@@ -20,6 +20,8 @@ LucidSwitch2 is an early clean-room emulator research project. Its host-side cor
 - Switch executable inspector (lucid::switchfmt): bounded plaintext NRO0/NSO0 metadata and segment-range parser; no loading or execution.
 - Compatibility inventory (lucid::switchfmt): separate original-Switch and Switch 2 target profiles and an explicit implementation-status report.
 - Restricted NRO homebrew runner (lucid::switchfmt): a bounded direct-branch/no-MOD0 execution experiment using the A64 subset; not a full Homebrew ABI or commercial game loader.
+- NSP package inspector (lucid::switchfmt): bounded PFS0 directory parsing with entry bounds/overlap validation and filename-based classification; NCA payloads are not opened.
+- CLI `--inspect-nsp`: reports a package's PFS0 entry names and file sizes without reading payload contents.
 
 ## Design constraints
 

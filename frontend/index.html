@@ -11,20 +11,57 @@ main{max-width:1300px;margin:auto;padding:32px 5vw 70px}.nav{display:flex;gap:10
 </style></head><body>
 <header><div class="brand">LUCID<span>SWITCH</span>2</div><div class="status" id="status">Experimental frontend · Engine not connected</div></header>
 <main><nav class="nav"><button class="active" data-page="home">Home</button><button data-page="library">Game Library</button><button data-page="settings">Settings</button></nav>
-<section id="home"><div class="hero"><div><div class="eyebrow">Your play space</div><h1>Play without<br>the clutter.</h1><p>A clean, controller-first library shell for LucidSwitch2. Add your own game files and organize your collection.</p><button class="primary" id="open-library">Open game library</button></div><div class="joys" aria-hidden="true"><div class="joy"></div><div class="joy right"></div></div></div><div class="section-head"><h2>Recently added</h2><span class="muted" id="recent-count">0 titles</span></div><div class="tiles" id="recent-tiles"></div><div class="notice">Prototype only: importing records file names and sizes in this browser. It does not parse, decrypt, install, or run games.</div></section>
+<section id="home"><div class="hero"><div><div class="eyebrow">Your play space</div><h1>Play without<br>the clutter.</h1><p>A clean, controller-first library shell for LucidSwitch2. Add your own game files and organize your collection.</p><button class="primary" id="open-library">Open game library</button></div><div class="joys" aria-hidden="true"><div class="joy"></div><div class="joy right"></div></div></div><div class="section-head"><h2>Recently added</h2><span class="muted" id="recent-count">0 titles</span></div><div class="tiles" id="recent-tiles"></div><div class="notice">NSP import validates the local PFS0 package directory and summarizes its entries. It does not read or decrypt NCA content, install games, or launch them yet.</div></section>
 <section id="library" class="hidden"><div class="section-head"><div><div class="eyebrow">Collection</div><h2>Your games</h2></div><button class="primary" id="import-library">＋ Import games</button></div><div class="tiles" id="library-tiles"></div></section>
-<section id="settings" class="hidden"><div class="eyebrow">Preferences</div><h2>Settings</h2><div class="panel"><div class="settings-row"><div><strong>Import games</strong><div class="muted">Add local files to your library list</div></div><button class="primary" id="import-settings">Choose files</button></div><div class="settings-row"><div><strong>Controller input</strong><div class="muted">Browser Gamepad API detection</div></div><span id="controller-state" class="muted">Waiting for controller</span></div><div class="settings-row"><div><strong>Library storage</strong><div class="muted">Saved locally in this browser</div></div><span class="muted">Local only</span></div><div class="settings-row"><div><strong>Appearance</strong><div class="muted">Dark console-inspired theme</div></div><span class="muted">Default</span></div></div><div class="notice">File names and metadata stay in this browser's local storage. Files are not uploaded. Only import files you have the right to use.</div></section>
-<input id="file-picker" type="file" multiple accept=".nsp,.xci,.nro,.nca,.elf,.bin,.rom" hidden></main><footer>LucidSwitch2 · Independent emulator research project · Not affiliated with Nintendo.</footer>
+<section id="settings" class="hidden"><div class="eyebrow">Preferences</div><h2>Settings</h2><div class="panel"><div class="settings-row"><div><strong>Import games</strong><div class="muted">Import local .nsp packages and inspect their PFS0 directory</div></div><button class="primary" id="import-settings">Choose files</button></div><div class="settings-row"><div><strong>Controller input</strong><div class="muted">Browser Gamepad API detection</div></div><span id="controller-state" class="muted">Waiting for controller</span></div><div class="settings-row"><div><strong>Library storage</strong><div class="muted">Saved locally in this browser</div></div><span class="muted">Local only</span></div><div class="settings-row"><div><strong>Appearance</strong><div class="muted">Dark console-inspired theme</div></div><span class="muted">Default</span></div></div><div class="notice">Only the .nsp package directory summary is saved in this browser. Package bytes are not uploaded or retained. Encrypted NCA content is not opened or launched.</div></section>
+<input id="file-picker" type="file" multiple accept=".nsp" hidden></main><footer>LucidSwitch2 · Independent emulator research project · Not affiliated with Nintendo.</footer>
 <script>
 const $=s=>document.querySelector(s);let games=[];try{games=JSON.parse(localStorage.getItem("lucid-library")||"[]")}catch{games=[]}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function bytes(n){if(!n)return"0 B";let i=Math.min(Math.floor(Math.log(n)/Math.log(1024)),4);return(n/1024**i).toFixed(i?1:0)+" "+["B","KB","MB","GB","TB"][i]}
-function render(){let html=games.map((g,i)=>'<article class="tile"><div class="cover">'+esc(g.title.slice(0,2).toUpperCase())+'</div><div class="tile-info"><strong>'+esc(g.title)+'</strong><small>'+bytes(g.size)+' · '+esc(g.extension||"Unknown")+'</small><div style="margin-top:9px"><small class="danger">Not launchable yet</small><button data-remove="'+i+'" style="float:right;padding:4px 8px">Remove</button></div></div></article>').join("");$("#library-tiles").innerHTML=html||'<p class="muted">Your library is empty. Choose Import games to add local files.</p>';$("#recent-tiles").innerHTML=games.slice(0,4).map(g=>'<article class="tile"><div class="cover">'+esc(g.title.slice(0,2).toUpperCase())+'</div><div class="tile-info"><strong>'+esc(g.title)+'</strong><small>'+bytes(g.size)+'</small></div></article>').join("")||'<p class="muted">No games imported yet.</p>';$("#recent-count").textContent=games.length+" titles";document.querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>{games.splice(+b.dataset.remove,1);save()})}
+function gameStatus(g){if(!g.valid)return"Invalid NSP";return"Package recognized · not launchable yet"}
+function render(){let html=games.map((g,i)=>'<article class="tile"><div class="cover">NSP</div><div class="tile-info"><strong>'+esc(g.title||g.name)+'</strong><small>'+bytes(g.size)+' · NSP</small><div style="margin-top:8px"><small class="'+(g.valid?"muted":"danger")+'">'+esc(gameStatus(g))+'</small></div>'+(g.valid?'<small style="display:block;margin-top:7px">'+g.entryCount+' entries · '+g.ncaCount+' NCA · '+g.ticketCount+' tickets</small>':'<small style="display:block;margin-top:7px" class="danger">'+esc(g.error||"Container validation failed")+'</small>')+'<button data-remove="'+i+'" style="float:right;padding:4px 8px">Remove</button></div></article>').join("");$("#library-tiles").innerHTML=html||'<p class="muted">Your library is empty. Choose Import games to add a valid .nsp package.</p>';$("#recent-tiles").innerHTML=games.slice(0,4).map(g=>'<article class="tile"><div class="cover">NSP</div><div class="tile-info"><strong>'+esc(g.title||g.name)+'</strong><small>'+bytes(g.size)+' · '+esc(gameStatus(g))+'</small></div></article>').join("")||'<p class="muted">No packages imported yet.</p>';$("#recent-count").textContent=games.length+" packages";document.querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>{games.splice(+b.dataset.remove,1);save()})}
 function save(){localStorage.setItem("lucid-library",JSON.stringify(games));render()}
 function show(page){document.querySelectorAll("main>section").forEach(s=>s.classList.toggle("hidden",s.id!==page));document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===page))}
 document.querySelectorAll(".nav button").forEach(b=>b.onclick=()=>show(b.dataset.page));$("#open-library").onclick=()=>show("library");
 function pick(){$("#file-picker").click()}$("#import-library").onclick=pick;$("#import-settings").onclick=pick;
-$("#file-picker").onchange=e=>{for(const f of e.target.files){if(!games.some(g=>g.name===f.name&&g.size===f.size)){let ext=f.name.includes(".")?f.name.split(".").pop().toUpperCase():"";games.unshift({name:f.name,title:f.name.replace(/\.[^.]+$/,""),size:f.size,extension:ext})}}save();show("library");e.target.value=""};
+async function inspectNsp(file){
+ if(!file.name.toLowerCase().endsWith(".nsp"))throw new Error("Choose a .nsp file.");
+ if(file.size<16)throw new Error("File is too short to contain a PFS0 header.");
+ const head=new DataView(await file.slice(0,16).arrayBuffer());
+ const magic=String.fromCharCode(head.getUint8(0),head.getUint8(1),head.getUint8(2),head.getUint8(3));
+ if(magic!=="PFS0")throw new Error("This file does not start with a PFS0 directory. It is not a supported NSP container.");
+ const count=head.getUint32(4,true),stringSize=head.getUint32(8,true),reserved=head.getUint32(12,true);
+ if(reserved!==0)throw new Error("PFS0 reserved header field is not zero.");
+ if(count===0||count>8192)throw new Error("PFS0 file count is outside the supported 1–8192 range.");
+ if(stringSize>16*1024*1024)throw new Error("PFS0 string table exceeds the 16 MiB safety limit.");
+ const tableSize=count*24,stringsStart=16+tableSize,dataStart=stringsStart+stringSize;
+ if(!Number.isSafeInteger(dataStart)||dataStart>file.size)throw new Error("PFS0 tables extend beyond the selected file.");
+ const meta=new DataView(await file.slice(16,dataStart).arrayBuffer());
+ const decoder=new TextDecoder("utf-8",{fatal:true});
+ const ranges=[];let nca=0,tik=0,cert=0,cnmt=0,other=0;
+ for(let i=0;i<count;i++){
+  const at=i*24,off=meta.getBigUint64(at,true),size=meta.getBigUint64(at+8,true),nameOff=meta.getUint32(at+16,true),entryReserved=meta.getUint32(at+20,true);
+  if(entryReserved!==0)throw new Error("PFS0 entry "+i+" has a nonzero reserved field.");
+  if(nameOff>=stringSize)throw new Error("PFS0 entry "+i+" has an invalid filename offset.");
+  const nameIndex=tableSize+nameOff;let terminator=nameIndex;
+  while(terminator<tableSize+stringSize&&meta.getUint8(terminator)!==0)terminator++;
+  if(terminator===nameIndex||terminator===tableSize+stringSize||terminator-nameIndex>4096)throw new Error("PFS0 entry "+i+" has an invalid filename.");
+  const name=decoder.decode(new Uint8Array(meta.buffer,nameIndex,terminator-nameIndex));
+  const payloadSize=BigInt(file.size-dataStart);
+  if(off>payloadSize||size>payloadSize-off)throw new Error("PFS0 entry "+name+" points outside the NSP file.");
+  if(size>0n)ranges.push([off,off+size,name]);
+  const lower=name.toLowerCase();
+  if(lower.endsWith(".nca")){nca++;if(lower.includes("cnmt"))cnmt++;}
+  else if(lower.endsWith(".tik"))tik++;
+  else if(lower.endsWith(".cert"))cert++;
+  else other++;
+ }
+ ranges.sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0);
+ for(let i=1;i<ranges.length;i++)if(ranges[i][0]<ranges[i-1][1])throw new Error("PFS0 file data ranges overlap.");
+ return {entryCount:count,ncaCount:nca,ticketCount:tik,certificateCount:cert,metadataNcaCount:cnmt,otherFileCount:other};
+}
+$("#file-picker").onchange=async e=>{let added=0;for(const f of e.target.files){if(games.some(g=>g.name===f.name&&g.size===f.size))continue;try{const info=await inspectNsp(f);games.unshift({name:f.name,title:f.name.replace(/\.[^.]+$/,""),size:f.size,extension:"NSP",valid:true,...info});added++;}catch(err){alert(f.name+": "+err.message);}}if(added){save();show("library");}e.target.value=""};
 window.addEventListener("gamepadconnected",e=>{$("#controller-state").textContent=e.gamepad.id+" connected";$("#status").textContent="Controller connected · "+e.gamepad.id});window.addEventListener("gamepaddisconnected",()=>{$("#controller-state").textContent="Waiting for controller";$("#status").textContent="Experimental frontend · Engine not connected"});
 window.addEventListener("keydown",e=>{if(e.key==="Escape")show("home");if(e.key==="ArrowRight"||e.key==="ArrowLeft"){let p=["home","library","settings"],i=p.findIndex(x=>!$("#"+x).classList.contains("hidden"));show(p[(i+(e.key==="ArrowRight"?1:2))%3])}});render();
 </script></body></html>

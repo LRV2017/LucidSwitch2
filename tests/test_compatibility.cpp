@@ -45,6 +45,8 @@ void test_compatibility_reports() {
            "report original Switch NRO/NSO metadata-only support");
     expect(original_text.find("[not implemented] System / HIPC/CMIF") != std::string::npos,
            "report missing Horizon IPC and service implementations");
+    expect(original_text.find("[metadata-only] Container / NSP/PFS0 directory inspection") != std::string::npos,
+           "report NSP package directory inspection as metadata-only");
     expect(original_text.find("[partial] Executable / Restricted plaintext NRO homebrew execution") != std::string::npos,
            "report restricted NRO homebrew execution as partial");
     expect(original_text.find("no commercial Switch or Switch 2 game") != std::string::npos,
