@@ -55,5 +55,8 @@ jobs:
           fi
           "$LUCID_BIN" --create-homebrew-sample build/register_demo.lxp
           "$LUCID_BIN" --inspect-homebrew build/register_demo.lxp
-          "$LUCID_BIN" --run-homebrew build/register_demo.lxp 3
+          RUN_OUTPUT=$("$LUCID_BIN" --run-homebrew build/register_demo.lxp 3)
+          printf '%s\n' "$RUN_OUTPUT"
+          printf '%s\n' "$RUN_OUTPUT" | grep -qi 'X0: 0x2a'
+          printf '%s\n' "$RUN_OUTPUT" | grep -qi 'X1: 0xc0de'
         shell: bash

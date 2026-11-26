@@ -14,7 +14,7 @@ All integers are unsigned little-endian. The file is exactly one 48-byte header 
 | 12 | 4 | Flags | 0; all other values rejected |
 | 16 | 8 | Load address | 4 KiB aligned, lower 48-bit address |
 | 24 | 4 | Entry offset | 4-byte aligned offset within code |
-| 28 | 4 | Code size | 1 byte to 8 MiB, multiple of 4 |
+| 28 | 4 | Code size | 4 bytes to 8 MiB, multiple of 4 |
 | 32 | 4 | Data size | 0 to 8 MiB |
 | 36 | 4 | BSS size | Zero-initialized memory, up to 16 MiB |
 | 40 | 4 | Stack size | 4 KiB to 16 MiB, multiple of 16 |
