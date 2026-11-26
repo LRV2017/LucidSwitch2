@@ -28,6 +28,7 @@ add_library(lucid_core
     src/cpu/a64_interpreter.cpp
     src/cpu/cpu_memory.cpp
     src/arch/system_registers.cpp
+    src/arch/svc_dispatcher.cpp
     src/mmu/address_space.cpp
     src/mmu/stage1_mmu.cpp
     src/devices/interrupt_controller.cpp

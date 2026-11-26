@@ -45,6 +45,8 @@ constexpr std::array<CompatibilityFeature, 14U> kCommonFeatures{{
      "One constrained 4 KiB / 48-bit TTBR0 regime; not a complete target MMU."},
     {"System", "Exception entry and SVC handling", ImplementationStatus::Partial,
      "Selected SVC/IRQ paths exist; no complete privilege or system-call ABI."},
+    {"System", "EL0 SVC dispatch subset", ImplementationStatus::Partial,
+     "Implements SVC 0x10 current-processor query and SVC 0x1E deterministic virtual-tick query. Other calls still enter the guest vector path."},
     {"System", "Cooperative process/thread scheduler and handle table", ImplementationStatus::Partial,
      "A bounded host-side test substrate supports process/thread lifecycle, priority scheduling, wait/wake, and per-process typed handles; it is not Horizon-compatible."},
     {"IPC", "HIPC/CMIF raw-only framing and command registry", ImplementationStatus::Partial,

@@ -174,6 +174,56 @@ void test_timer_irq_integration() {
            emulator.interrupt_controller().pending_mask() == 0U,
            "timer IRQ is acknowledged and not spuriously re-delivered");
 }
+
+void test_emulator_svc_dispatch_subset() {
+    using namespace lucid;
+    core::Emulator emulator;
+    core::EmulatorConfig config{};
+    config.memory_base = 0x1000U;
+    config.memory_size = 0x10000U;
+    config.entry_point = 0x1000U;
+    expect(emulator.initialize(config),
+           "initialize emulator for the EL0 SVC dispatch test");
+
+    constexpr std::uint64_t entry = 0x1000U;
+    constexpr std::uint64_t vector_base = 0x4000U;
+    constexpr std::uint32_t svc_get_processor =
+        0xD4000001U | (0x10U << 5U);
+    constexpr std::uint32_t svc_get_tick =
+        0xD4000001U | (0x1EU << 5U);
+    constexpr std::uint32_t svc_wait_sync =
+        0xD4000001U | (0x18U << 5U);
+
+    expect(write32(emulator.memory_bus(), entry, svc_get_processor),
+           "write GetCurrentProcessorNumber SVC #0x10");
+    expect(write32(emulator.memory_bus(), entry + 4U, svc_get_tick),
+           "write GetSystemTick SVC #0x1E");
+    expect(write32(emulator.memory_bus(), entry + 8U, svc_wait_sync),
+           "write unimplemented WaitSynchronization SVC #0x18");
+    (void)emulator.cpu_context().system_registers.write(
+        arch::SystemRegister::VBAR_EL1, vector_base);
+
+    expect(emulator.run(1U) == core::RunResult::InstructionLimitReached,
+           "dispatch SVC #0x10 and return directly to EL0");
+    expect(emulator.cpu_context().x[0] == 0U &&
+           emulator.cpu_context().program_counter == entry + 4U &&
+           emulator.cpu_context().system_registers.current_el() == 0U,
+           "GetCurrentProcessorNumber returns virtual CPU zero");
+
+    expect(emulator.run(1U) == core::RunResult::InstructionLimitReached,
+           "dispatch SVC #0x1E and return directly to EL0");
+    expect(emulator.cpu_context().x[0] == 1U &&
+           emulator.cpu_context().program_counter == entry + 8U &&
+           emulator.cpu_context().system_registers.current_el() == 0U,
+           "GetSystemTick returns the deterministic guest tick count");
+
+    expect(emulator.run(1U) == core::RunResult::InstructionLimitReached,
+           "leave SVC #0x18 to the guest exception-vector path");
+    expect(emulator.cpu_context().program_counter == vector_base + 0x400U &&
+           emulator.cpu_context().system_registers.current_el() == 1U,
+           "unimplemented WaitSynchronization is not falsely claimed as handled");
+}
+
 } // namespace
 
 int main() {
@@ -181,6 +231,7 @@ int main() {
     test_el1_sp0_vector();
     test_virtual_timer_one_shot();
     test_timer_irq_integration();
+    test_emulator_svc_dispatch_subset();
 
     if (failures != 0) {
         std::cerr << failures << " exception test(s) failed.\n";

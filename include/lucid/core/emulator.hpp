@@ -1,5 +1,6 @@
 #pragma once
 #include "lucid/core/memory_bus.hpp"
+#include "lucid/arch/svc_dispatcher.hpp"
 #include "lucid/cpu/cpu_backend.hpp"
 #include "lucid/devices/interrupt_controller.hpp"
 #include "lucid/devices/virtual_timer.hpp"
@@ -50,6 +51,7 @@ private:
     devices::VirtualTimer virtual_timer_{};
     devices::InterruptController interrupt_controller_{};
     arch::ExceptionRouter exception_router_{};
+    arch::SvcDispatcher svc_dispatcher_{};
 };
 [[nodiscard]] const char* to_string(SessionState state) noexcept;
 [[nodiscard]] const char* to_string(RunResult result) noexcept;

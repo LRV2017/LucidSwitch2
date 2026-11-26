@@ -45,6 +45,8 @@ void test_compatibility_reports() {
            "report original Switch NRO/NSO metadata-only support");
     expect(original_text.find("[partial] CPU / AArch64 scalar integer interpreter") != std::string::npos,
            "report expanded but incomplete AArch64 scalar execution");
+    expect(original_text.find("[partial] System / EL0 SVC dispatch subset") != std::string::npos,
+           "report the initial EL0 SVC dispatch subset as partial");
     expect(original_text.find("[partial] System / Cooperative process/thread scheduler and handle table") != std::string::npos,
            "report the cooperative process/thread scheduler as partial");
     expect(original_text.find("[not implemented] System / General Horizon process loader and runtime") != std::string::npos,

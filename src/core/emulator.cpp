@@ -202,6 +202,16 @@ RunResult Emulator::run(std::uint64_t instruction_budget) noexcept {
             return RunResult::CpuFault;
         }
 
+        if (last_step_result_ == cpu::StepResult::ExceptionTaken) {
+            const arch::SvcDispatchResult svc_result =
+                svc_dispatcher_.dispatch(cpu_context_, virtual_timer_,
+                                         exception_router_);
+            if (svc_result == arch::SvcDispatchResult::InvalidExceptionState) {
+                state_ = SessionState::Faulted;
+                return RunResult::CpuFault;
+            }
+        }
+
         // Deterministic one-tick-per-instruction timer; the timer is wired to
         // interrupt source 30 and is acknowledged only after IRQ delivery.
         virtual_timer_.advance(1U);
