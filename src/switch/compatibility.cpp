@@ -67,6 +67,12 @@ constexpr CompatibilityFeature kOriginalExecutableFeature{
     "Reads and bounds-checks selected metadata; no decompression, relocation, dynamic linking, loading, or execution."
 };
 
+constexpr CompatibilityFeature kSwitch2CpuClusterFeature{
+    "CPU", "Eight-core Switch 2 CPU-context cluster",
+    ImplementationStatus::Partial,
+    "Eight independent A64 architectural contexts share guest memory and are stepped one instruction at a time in deterministic round-robin order. This is not parallel execution, a Horizon scheduler, or a complete Cortex-A78C implementation."
+};
+
 constexpr CompatibilityFeature kSwitch2ExecutableFeature{
     "Executable", "Switch 2 title/package loading",
     ImplementationStatus::NotImplemented,
@@ -134,6 +140,7 @@ void write_compatibility_report(const HardwareTarget target, std::ostream& outpu
         print_feature(kNspPackageFeature, output);
         print_feature(kRestrictedNroFeature, output);
     } else {
+        print_feature(kSwitch2CpuClusterFeature, output);
         print_feature(kSwitch2ExecutableFeature, output);
     }
 

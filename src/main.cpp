@@ -7,6 +7,7 @@
 #include "lucid/switch/compatibility.hpp"
 #include "lucid/switch/homebrew_loader.hpp"
 #include "lucid/switch/nsp_package.hpp"
+#include "lucid/switch2/cpu_cluster.hpp"
 
 #include <algorithm>
 #include <array>
@@ -22,7 +23,7 @@
 #include <vector>
 
 namespace {
-constexpr const char* kVersion = "0.18.0";
+constexpr const char* kVersion = "0.19.0";
 constexpr std::uint64_t kDemoBase = 0x1000U;
 constexpr std::uint64_t kDemoInstructionBudget = 16U;
 constexpr std::uint64_t kDefaultHomebrewBudget = 100000U;
@@ -41,6 +42,7 @@ void print_help() {
         << "  lucidswitch2 --self-test  Run memory and CPU smoke checks\n"
         << "  lucidswitch2 --run        Execute a bounded synthetic A64 demo\n"
         << "  lucidswitch2 --gpu-info   Check optional Vulkan device support\n"
+        << "  lucidswitch2 --switch2-cpu-demo  Run the Switch 2 eight-core CPU-context demo\n"
         << "  lucidswitch2 --graphics-demo [--window] [--vulkan]  Render an original test scene\n"
         << "  lucidswitch2 --create-homebrew-sample <output.lxp>\n"
         << "  lucidswitch2 --inspect-homebrew <program.lxp>\n"
@@ -240,6 +242,70 @@ int run_graphics_demo(const bool use_window, const bool force_vulkan) {
         return 1;
     }
     return run_software_graphics_demo(use_window);
+}
+
+
+int run_switch2_cpu_demo() {
+    using lucid::core::MemoryBus;
+    using lucid::switch2::CpuCluster;
+    constexpr std::uint64_t base = 0x1000U;
+    constexpr std::size_t region_size = 0x1000U;
+    constexpr std::uint64_t instruction_budget = CpuCluster::CoreCount * 2U;
+    MemoryBus memory;
+    std::string error;
+    if (!memory.map_region(base, region_size, &error)) {
+        std::cerr << "Switch 2 CPU demo memory setup failed: " << error << "\n";
+        return 1;
+    }
+
+    CpuCluster cluster;
+    for (std::size_t core = 0; core < CpuCluster::CoreCount; ++core) {
+        const std::uint32_t immediate = 42U + static_cast<std::uint32_t>(core);
+        const std::uint32_t movz_x0 = 0xD2800000U | (immediate << 5U);
+        constexpr std::uint32_t branch_to_self = 0x14000000U;
+        const std::uint64_t entry = base + static_cast<std::uint64_t>(core) * 8U;
+        std::array<std::uint8_t, 8U> program{};
+        const std::array<std::uint32_t, 2U> words{movz_x0, branch_to_self};
+        for (std::size_t word = 0; word < words.size(); ++word) {
+            for (std::size_t byte = 0; byte < 4U; ++byte) {
+                program[word * 4U + byte] = static_cast<std::uint8_t>(
+                    (words[word] >> (byte * 8U)) & 0xFFU);
+            }
+        }
+        if (!memory.write(entry, program, &error) ||
+            !cluster.start_core(core, entry)) {
+            std::cerr << "Switch 2 CPU core startup failed at core "
+                      << core << ": " << error << "\n";
+            return 1;
+        }
+    }
+
+    const auto report = cluster.run_round_robin(memory, instruction_budget);
+    if (report.instructions_executed != instruction_budget ||
+        report.runnable_cores != CpuCluster::CoreCount ||
+        report.faulted_cores != 0U) {
+        std::cerr << "Switch 2 CPU cluster did not complete its bounded smoke test.\n";
+        return 1;
+    }
+
+    std::cout << "Switch 2 eight-core CPU-context smoke test\n";
+    for (std::size_t core = 0; core < CpuCluster::CoreCount; ++core) {
+        const auto* context = cluster.context(core);
+        if (context == nullptr || context->instructions_retired != 2U ||
+            context->x[0] != 42ULL + static_cast<std::uint64_t>(core)) {
+            std::cerr << "Unexpected architectural state on core " << core << ".\n";
+            return 1;
+        }
+        std::cout << "  Core " << core << ": X0=" << context->x[0]
+                  << ", retired=" << context->instructions_retired
+                  << ", state=" << lucid::switch2::to_string(cluster.state(core))
+                  << "\n";
+    }
+    std::cout << "[PASS] eight independent A64 contexts share one guest memory bus\n"
+              << "[PASS] deterministic one-instruction round-robin execution\n"
+              << "This is a CPU-cluster foundation only; no Horizon OS, Switch 2 GPU, "
+                 "game loader, or commercial-game compatibility is implied.\n";
+    return 0;
 }
 
 int run_synthetic_demo(const bool self_test) {
@@ -541,6 +607,7 @@ int main(int argc, char* argv[]) {
     if (command == "--self-test") return run_synthetic_demo(true);
     if (command == "--run") return run_synthetic_demo(false);
     if (command == "--gpu-info") return run_gpu_info();
+    if (command == "--switch2-cpu-demo") return run_switch2_cpu_demo();
     if (command == "--graphics-demo") {
         bool use_window = false;
         bool force_vulkan = false;

@@ -20,6 +20,16 @@ The official Nintendo specification describes Switch 2 as using a custom NVIDIA 
 
 Switch 2 hardware research reports 4 MB shared L3 cache, 256 KiB L2 per core, a 128-bit LPDDR5X-7500-class interface and an Ampere GPU with 1536 cores. It also reports ARM pointer-authentication features. Those details are attributed to the Switch 2 reverse-engineering community, not to Nintendo's public technical specification.
 
+## Switch 2 CPU cluster experiment
+
+The project now has a target-specific eight-context CPU-cluster experiment, matching the eight Cortex-A78C cores reported by community reverse engineering of the T239. Each context owns independent A64 architectural registers, PC, flags, and system-register state. All contexts share a checked host-backed guest memory bus.
+
+The scheduler is intentionally deterministic and cooperative: it executes one instruction on each runnable core in round-robin order. The CLI command `--switch2-cpu-demo` and its test validate independent register state, shared-memory access, scheduling order, and fault isolation between cores.
+
+This is only a structural CPU milestone. It does not run eight host threads, implement cache coherency or atomics/exclusives, model memory barriers, wire the full exception/SVC path, provide core affinity, or implement the Switch 2 Horizon scheduler. The A64 interpreter remains an incomplete instruction subset. Switch 2 executable loading, services, and Ampere GPU emulation are still absent.
+
+See [switch2-cpu-cluster.md](switch2-cpu-cluster.md) for the precise implementation boundary.
+
 ## Executable container model
 
 ### NRO0

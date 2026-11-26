@@ -14,6 +14,7 @@ LucidSwitch2 does not download game packages or keys from ROMSLAB. The site is n
 - SwitchBrew NSO0 format notes: https://switchbrew.org/wiki/NSO0
 - SwitchBrew NCA format notes: https://switchbrew.org/wiki/NCA
 - Nintendo official Switch 2 specifications: https://www.nintendo.com/us/gaming-systems/switch-2/tech-specs/
+- SwitchBrew Switch 2 T239 community reverse-engineering notes: https://switchbrew.org/wiki/Switch_2%3A_Tegra_T239
 
 Use the official manufacturer specifications for official claims. Mark reverse-engineered implementation detail as community research. A format reference does not by itself establish loader compatibility.
 

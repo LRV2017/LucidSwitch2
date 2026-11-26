@@ -73,6 +73,8 @@ void test_compatibility_reports() {
     const std::string switch2_text = switch2.str();
     expect(switch2_text.find("Switch 2") != std::string::npos,
            "produce a target-specific Switch 2 report");
+    expect(switch2_text.find("[partial] CPU / Eight-core Switch 2 CPU-context cluster") != std::string::npos,
+           "report the initial eight-core Switch 2 CPU-context cluster as partial");
     expect(switch2_text.find("Switch 2 title/package loading") != std::string::npos,
            "report Switch 2 title loading as not implemented");
     expect(switch2_text.find("NRO0/NSO0 plaintext metadata inspection") == std::string::npos,

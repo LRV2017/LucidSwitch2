@@ -36,7 +36,9 @@ An experimental, clean-room emulator research project focused on building a lawf
 
 The LXP format is an original synthetic test container. It is not a Nintendo executable format and does not implement a guest operating system, syscalls, dynamic linking, or console services. See [docs/homebrew-format.md](docs/homebrew-format.md).
 
-LucidSwitch2 accepts `.nsp` packages for read-only PFS0 directory inspection through `--inspect-nsp`. The library UI also accepts `.nsp` files, validates the PFS0 file table and data ranges locally, and summarizes package entries. Phase 9 adds a restricted original-Switch NRO execution prototype for plaintext images with a direct branch entry and a bounded MOD0 relocation subset (relative RELA/RELR entries only). It uses the incomplete A64 interpreter; the process scheduler and HIPC/CMIF code are foundations only, not connected Horizon syscalls or services. The guest console GPU is not implemented, so ordinary homebrew applications and commercial games are not expected to run. It does not process NCA containers or protected content. Switch 2 remains a separate research target with no executable loader. See [docs/switch-architecture.md](docs/switch-architecture.md), [docs/switch-executable-inspection.md](docs/switch-executable-inspection.md), [docs/restricted-nro-homebrew-runner.md](docs/restricted-nro-homebrew-runner.md), and [docs/nsp-package-import.md](docs/nsp-package-import.md), and [docs/svc-dispatch.md](docs/svc-dispatch.md). Research-source notes, including the supplied ROMSLAB link, are in [docs/research-sources.md](docs/research-sources.md).
+LucidSwitch2 accepts `.nsp` packages for read-only PFS0 directory inspection through `--inspect-nsp`. The library UI also accepts `.nsp` files, validates the PFS0 file table and data ranges locally, and summarizes package entries. Phase 9 adds a restricted original-Switch NRO execution prototype for plaintext images with a direct branch entry and a bounded MOD0 relocation subset (relative RELA/RELR entries only). It uses the incomplete A64 interpreter; the process scheduler and HIPC/CMIF code are foundations only, not connected Horizon syscalls or services. The guest console GPU is not implemented, so ordinary homebrew applications and commercial games are not expected to run. It does not process NCA containers or protected content. Switch 2 now has an isolated eight-context A64 CPU-cluster experiment, but still has no executable loader or game runtime. See [docs/switch-architecture.md](docs/switch-architecture.md), [docs/switch-executable-inspection.md](docs/switch-executable-inspection.md), [docs/restricted-nro-homebrew-runner.md](docs/restricted-nro-homebrew-runner.md), and [docs/nsp-package-import.md](docs/nsp-package-import.md), and [docs/svc-dispatch.md](docs/svc-dispatch.md). Research-source notes, including the supplied ROMSLAB link, are in [docs/research-sources.md](docs/research-sources.md).
+
+The Switch 2 CPU-cluster demo runs eight independent A64 contexts against shared guest memory using deterministic round-robin scheduling. It is not multi-host-thread execution and does not provide Horizon scheduling, inter-core atomics, or game compatibility.
 
 The graphics path is a clean-room renderer foundation, not Switch 2 GPU emulation. When Vulkan and glslc are available, the native backend executes the project's own vertex and fragment shaders, consumes Vulkan vertex/index buffers, samples device-local texture images, performs depth-tested rendering, and reads back the completed off-screen image. With SDL2, it can present by blitting the GPU target into a real Vulkan swapchain. The CPU reference renderer remains the portable fallback. The Vulkan path currently uses synchronous queue waits and a single fixed shader pair; it does not translate console shaders or implement console GPU commands. See [docs/gpu-foundation.md](docs/gpu-foundation.md).
 
@@ -59,6 +61,7 @@ Requirements:
     .\build\Release\lucidswitch2.exe --self-test
     .\build\Release\lucidswitch2.exe --run
     .\build\Release\lucidswitch2.exe --gpu-info
+    .\build\Release\lucidswitch2.exe --switch2-cpu-demo
     .\build\Release\lucidswitch2.exe --graphics-demo
     .\build\Release\lucidswitch2.exe --graphics-demo --window
     .\build\Release\lucidswitch2.exe --graphics-demo --vulkan
@@ -79,6 +82,7 @@ Requirements:
     ./build/lucidswitch2 --self-test
     ./build/lucidswitch2 --run
     ./build/lucidswitch2 --gpu-info
+    ./build/lucidswitch2 --switch2-cpu-demo
     ./build/lucidswitch2 --graphics-demo
     ./build/lucidswitch2 --graphics-demo --window
     ./build/lucidswitch2 --graphics-demo --vulkan

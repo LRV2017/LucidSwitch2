@@ -16,6 +16,7 @@ This document is intentionally blunt so the project's maturity is not overstated
 - The emulator can run original LXP test programs and a narrow synthetic/minimal NRO profile. It is not a commercial game loader.
 - A successful build, self-test, or CPU demo is not proof that console software can boot or run.
 - No Nintendo Switch 2 hardware compatibility or commercial game compatibility is claimed.
+- A separate Switch 2 CPU-cluster experiment has eight independent A64 contexts and deterministic round-robin stepping over shared guest memory. It is not integrated into the single-core `Emulator`, does not use real host parallelism, and does not model SMP atomics, cache coherency, barriers, affinity, or Horizon scheduling.
 
 ## Graphics foundation and Phase 5
 
