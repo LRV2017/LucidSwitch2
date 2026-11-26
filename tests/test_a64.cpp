@@ -419,8 +419,8 @@ int main() {
            "LSLV masks the shift count and shifts left");
     expect(state.x[5] == (state.x[1] >> 4U),
            "LSRV shifts right logically");
-    expect(state.x[6] == (state.x[1] >> 4U),
-           "ASRV preserves a positive value's sign");
+    expect(state.x[6] == 0xFF123456789ABCDEULL,
+           "ASRV sign-extends a negative 64-bit operand");
     expect(state.x[7] == ((state.x[1] >> 4U) | (state.x[1] << 60U)),
            "RORV rotates within the 64-bit operand width");
 
