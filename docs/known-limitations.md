@@ -42,7 +42,7 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 
 ## Phase 8 compatibility research
 
-- The NRO0/NSO0 inspector reads plaintext metadata only. The separate Phase 9 NRO runner accepts a narrow no-MOD0 NRO profile and does not decompress, hash-verify, relocate, dynamically link, or provide operating-system services.
+- The NRO0/NSO0 inspector reads plaintext metadata only. The separate Phase 9 NRO runner accepts plaintext NRO0 with a direct entry branch and bounded relative MOD0 relocation support; it does not decompress, verify module hashes, perform symbol linking, import modules, or provide Horizon services.
 - NRO inspection currently supports the classic uncompressed file-offset layout; compressed/extended NRO variants are rejected.
 - NSO compression, hash-check, execute-only, and Zstd flags are reported, but the segment contents are not decompressed or hash-verified.
 - No NCA content archive parser or encrypted content processing is implemented.

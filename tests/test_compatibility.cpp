@@ -61,6 +61,8 @@ void test_compatibility_reports() {
            "report NSP package directory inspection as metadata-only");
     expect(original_text.find("[partial] Executable / Restricted plaintext NRO homebrew execution") != std::string::npos,
            "report restricted NRO homebrew execution as partial");
+    expect(original_text.find("symbol-free relative MOD0 RELA/RELR relocations") != std::string::npos,
+           "report the limited MOD0 relative-relocation implementation accurately");
     expect(original_text.find("no commercial Switch or Switch 2 game") != std::string::npos,
            "state that the project does not yet load commercial games");
 

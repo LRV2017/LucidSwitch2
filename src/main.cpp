@@ -22,7 +22,7 @@
 #include <vector>
 
 namespace {
-constexpr const char* kVersion = "0.16.0";
+constexpr const char* kVersion = "0.17.0";
 constexpr std::uint64_t kDemoBase = 0x1000U;
 constexpr std::uint64_t kDemoInstructionBudget = 16U;
 constexpr std::uint64_t kDefaultHomebrewBudget = 100000U;
@@ -421,7 +421,8 @@ int run_nro_homebrew(const std::filesystem::path& path,
               << "Run result: " << lucid::core::to_string(report.run_result) << "\n"
               << "Last CPU step: " << lucid::core::to_string(report.last_step) << "\n"
               << "Runtime: bounded A64 interpreter; no Horizon OS or Switch GPU.\n"
-              << "Unsupported: MOD0 relocations, dynamic imports, system services, threads, audio, input, and display.\n";
+              << "MOD0 relative relocations applied: " << report.relocations_applied << "\n"
+              << "Unsupported: symbol-based relocations, dynamic imports, Horizon services, thread execution, audio, input, and display.\n";
 
     if (report.run_result != lucid::core::RunResult::InstructionLimitReached) {
         std::cerr << "The program reached an unsupported instruction or memory path; it did not complete a game session.\n";

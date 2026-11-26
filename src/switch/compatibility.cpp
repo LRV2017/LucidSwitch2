@@ -80,7 +80,7 @@ constexpr CompatibilityFeature kNspPackageFeature{
 constexpr CompatibilityFeature kRestrictedNroFeature{
     "Executable", "Restricted plaintext NRO homebrew execution",
     ImplementationStatus::Partial,
-    "A bounded A64 subset can run a minimal NRO with a direct entry branch and no MOD0 metadata. No relocations, dynamic imports, Horizon ABI, system services, or game runtime."
+    "A bounded A64 subset can run a minimal NRO with a direct entry branch and symbol-free relative MOD0 RELA/RELR relocations. No symbol resolution, dynamic imports, Horizon ABI, system services, or game runtime."
 };
 
 void print_feature(const CompatibilityFeature& feature, std::ostream& output) {

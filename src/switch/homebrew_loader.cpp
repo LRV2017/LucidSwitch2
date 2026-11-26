@@ -83,7 +83,8 @@ bool get_entry_offset(const ExecutableInfo& info,
 
     // The Homebrew ABI defines binary_ptr + 0 as the entry stub. It branches
     // past the NRO0 header into .text. Only direct B-immediate stubs are in
-    // the supported minimal, relocation-free test profile.
+    // the supported minimal entry profile; the MOD0 path below accepts only
+    // symbol-free relative relocations.
     const std::uint32_t branch = info.entry_stub_instruction;
     if ((branch & 0xFC000000U) != 0x14000000U) {
         set_error(error, "The NRO entry stub is not a direct A64 B instruction.");
