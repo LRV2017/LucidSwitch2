@@ -3,7 +3,6 @@
 namespace lucid::arch {
 namespace {
 constexpr std::uint64_t kDaifMask = 0x3C0U;
-constexpr std::uint64_t kIrqMask = 1U << 7U;
 constexpr std::uint64_t kAllAsyncMasks = 0x3C0U;
 }
 

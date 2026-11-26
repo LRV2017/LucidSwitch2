@@ -142,7 +142,7 @@ void test_timer_irq_integration() {
     expect(emulator.initialize(config), "initialize emulator for timer IRQ test");
 
     constexpr std::uint64_t vbar = 0x1000U;
-    constexpr std::uint64_t irq_vector = vbar + 0x280U;
+    constexpr std::uint64_t irq_vector = vbar + 0x480U;
     constexpr std::uint32_t nop = 0xD503201FU;
     constexpr std::uint32_t movz_x0_7 = 0xD28000E0U;
     constexpr std::uint32_t eret = 0xD69F03E0U;
