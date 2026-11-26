@@ -45,6 +45,8 @@ bool MemoryBus::map_region(std::uint64_t base, std::size_t size,
         region.base = base;
         region.permissions = permissions;
         region.bytes.resize(size, 0U);
+        region.exclusive_versions.resize(
+            ((size - 1U) / ExclusiveGranuleBytes) + 1U, 0U);
         regions_.push_back(std::move(region));
     } catch (const std::bad_alloc&) {
         set_error(error, "Not enough host memory to allocate the requested region.");
@@ -124,8 +126,74 @@ bool MemoryBus::write(std::uint64_t address, std::span<const std::uint8_t> input
     }
     std::copy(input.begin(), input.end(),
               region->bytes.begin() + static_cast<std::ptrdiff_t>(offset));
+    const std::size_t first_granule = offset / ExclusiveGranuleBytes;
+    const std::size_t last_granule =
+        (offset + input.size() - 1U) / ExclusiveGranuleBytes;
+    for (std::size_t index = first_granule; index <= last_granule; ++index) {
+        ++region->exclusive_versions[index];
+        if (region->exclusive_versions[index] == 0U)
+            ++region->exclusive_versions[index];
+    }
     return true;
 }
+
+bool MemoryBus::read_exclusive(const std::uint64_t address,
+    const std::span<std::uint8_t> output, std::uint64_t& version,
+    std::string* error) const {
+    if ((output.size() != 4U && output.size() != 8U) ||
+        (address % output.size()) != 0U) {
+        set_error(error, "Exclusive loads require aligned 4-byte or 8-byte accesses.");
+        return false;
+    }
+    const Region* region = find_region(address);
+    if (region == nullptr || !has_permission(region->permissions, MemoryPermission::Read)) {
+        set_error(error, "The exclusive-load address is unmapped or unreadable.");
+        return false;
+    }
+    const auto offset = static_cast<std::size_t>(address - region->base);
+    if (offset > region->bytes.size() ||
+        output.size() > region->bytes.size() - offset) {
+        set_error(error, "The exclusive load crosses a mapped-region boundary.");
+        return false;
+    }
+    if (!read_with_permission(address, output, MemoryPermission::Read, error))
+        return false;
+    version = region->exclusive_versions[offset / ExclusiveGranuleBytes];
+    return true;
+}
+
+bool MemoryBus::write_exclusive(const std::uint64_t address,
+    const std::span<const std::uint8_t> input,
+    const std::uint64_t expected_version, bool& stored, std::string* error) {
+    stored = false;
+    if ((input.size() != 4U && input.size() != 8U) ||
+        (address % input.size()) != 0U) {
+        set_error(error, "Exclusive stores require aligned 4-byte or 8-byte accesses.");
+        return false;
+    }
+    Region* region = find_region(address);
+    if (region == nullptr || !has_permission(region->permissions, MemoryPermission::Write)) {
+        set_error(error, "The exclusive-store address is unmapped or unwritable.");
+        return false;
+    }
+    const auto offset = static_cast<std::size_t>(address - region->base);
+    if (offset > region->bytes.size() ||
+        input.size() > region->bytes.size() - offset) {
+        set_error(error, "The exclusive store crosses a mapped-region boundary.");
+        return false;
+    }
+    const std::size_t granule = offset / ExclusiveGranuleBytes;
+    if (region->exclusive_versions[granule] != expected_version) return true;
+
+    std::copy(input.begin(), input.end(),
+              region->bytes.begin() + static_cast<std::ptrdiff_t>(offset));
+    ++region->exclusive_versions[granule];
+    if (region->exclusive_versions[granule] == 0U)
+        ++region->exclusive_versions[granule];
+    stored = true;
+    return true;
+}
+
 bool MemoryBus::can_access(std::uint64_t address, std::size_t size,
                             MemoryPermission permission) const noexcept {
     if (size == 0U) return true;

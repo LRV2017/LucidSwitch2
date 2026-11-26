@@ -2,7 +2,7 @@
 
 This document is intentionally blunt so the project's maturity is not overstated.
 
-- The A64 interpreter implements only the documented subset in a64-subset.md, not the complete ARMv8-A instruction set. Scalar S/D FP support is limited to FMOV, FADD, FSUB, FMUL, and FDIV; it is not full FP/SIMD support.
+- The A64 interpreter implements only the documented subset in a64-subset.md, not the complete ARMv8-A instruction set. Scalar S/D FP support is limited to FMOV, FADD, FSUB, FMUL, and FDIV; Advanced SIMD is a small integer-only subset; exclusive memory support is limited to aligned 32/64-bit LDXR/LDAXR/STXR/STLXR and CLREX.
 - The stage-1 MMU supports only one constrained 4 KiB / 48-bit TTBR0 regime with EL1 permission interpretation; it is not a complete ARMv8-A translation implementation.
 - No TTBR1, ASIDs, additional translation granules, stage-2 translation, complete TLB maintenance instructions, memory attribute handling, or full architectural fault syndromes are implemented.
 - MRS/MSR writes to TTBR0_EL1 and TCR_EL1 update the modeled register bank but do not yet reconfigure the active Stage1Mmu.
@@ -16,7 +16,7 @@ This document is intentionally blunt so the project's maturity is not overstated
 - The emulator can run original LXP test programs and a narrow synthetic/minimal NRO profile. It is not a commercial game loader.
 - A successful build, self-test, or CPU demo is not proof that console software can boot or run.
 - No Nintendo Switch 2 hardware compatibility or commercial game compatibility is claimed.
-- A separate Switch 2 CPU-cluster experiment has eight independent A64 contexts and deterministic round-robin stepping over shared guest memory. It is not integrated into the single-core `Emulator`, does not use real host parallelism, and does not model SMP atomics, cache coherency, barriers, affinity, or Horizon scheduling.
+- A separate Switch 2 CPU-cluster experiment has eight independent A64 contexts and deterministic round-robin stepping over shared guest memory. It is not integrated into the single-core `Emulator`, does not use real host parallelism, and does not model cache coherency, barriers, affinity, or Horizon scheduling. The guest memory bus now models conservative exclusive reservations for interleaved core execution, but is not safe for simultaneous host-thread access.
 
 ## Graphics foundation and Phase 5
 

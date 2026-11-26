@@ -17,6 +17,8 @@ enum class MemoryPermission : std::uint8_t {
 // Generic checked address space. No console-specific map is implied.
 class MemoryBus final {
 public:
+    static constexpr std::size_t ExclusiveGranuleBytes = 16U;
+
     [[nodiscard]] bool map_region(std::uint64_t base, std::size_t size,
         std::string* error = nullptr,
         MemoryPermission permissions = MemoryPermission::ReadWriteExecute);
@@ -26,6 +28,16 @@ public:
         std::span<std::uint8_t> output, std::string* error = nullptr) const;
     [[nodiscard]] bool write(std::uint64_t address,
         std::span<const std::uint8_t> input, std::string* error = nullptr);
+
+    // Exclusive accesses use a documented 16-byte reservation granule. These
+    // operations are atomic relative to this bus's sequential guest execution;
+    // the bus is not currently safe for simultaneous host-thread access.
+    [[nodiscard]] bool read_exclusive(std::uint64_t address,
+        std::span<std::uint8_t> output, std::uint64_t& version,
+        std::string* error = nullptr) const;
+    [[nodiscard]] bool write_exclusive(std::uint64_t address,
+        std::span<const std::uint8_t> input, std::uint64_t expected_version,
+        bool& stored, std::string* error = nullptr);
     [[nodiscard]] bool can_access(std::uint64_t address, std::size_t size,
         MemoryPermission permission) const noexcept;
     [[nodiscard]] bool read8(std::uint64_t address, std::uint8_t& value,
@@ -38,6 +50,7 @@ private:
         std::uint64_t base{};
         std::vector<std::uint8_t> bytes;
         MemoryPermission permissions{MemoryPermission::ReadWriteExecute};
+        std::vector<std::uint64_t> exclusive_versions;
     };
     [[nodiscard]] Region* find_region(std::uint64_t address) noexcept;
     [[nodiscard]] const Region* find_region(std::uint64_t address) const noexcept;

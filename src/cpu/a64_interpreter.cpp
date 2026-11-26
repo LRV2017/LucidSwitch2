@@ -223,6 +223,83 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
     const std::uint64_t next_pc = context.program_counter + 4U;
 
 
+    // CLREX: discard this core's local exclusive reservation.
+    if (instruction == 0xD5033F5FU) {
+        context.clear_exclusive_monitor();
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
+    // LDXR / LDAXR (W/X): acquire exclusive reservation on the translated
+    // physical address. Acquire ordering is sequential in this single-host-
+    // thread execution model; no true host-thread memory ordering is claimed.
+    if ((instruction & 0x3FFF7C00U) == 0x085F7C00U) {
+        const unsigned size = (instruction >> 30U) & 0x3U;
+        if (size < 2U) return StepResult::UnsupportedInstruction;
+        const std::size_t transfer_size = std::size_t{1} << size;
+        const unsigned target = instruction & 0x1FU;
+        const unsigned base_register = (instruction >> 5U) & 0x1FU;
+        const std::uint64_t address = read_base_register(context, base_register);
+        if ((address % transfer_size) != 0U) return StepResult::MemoryFault;
+
+        std::array<std::uint8_t, 8U> bytes{};
+        std::uint64_t physical_address = 0U;
+        std::uint64_t version = 0U;
+        if (!memory.read_exclusive(address,
+                std::span<std::uint8_t>(bytes.data(), transfer_size),
+                physical_address, version)) {
+            return StepResult::MemoryFault;
+        }
+
+        std::uint64_t value = 0U;
+        for (std::size_t byte = 0U; byte < transfer_size; ++byte)
+            value |= static_cast<std::uint64_t>(bytes[byte]) << (byte * 8U);
+        write_register(context, target, value, size == 3U);
+        context.exclusive_monitor_valid = true;
+        context.exclusive_address = physical_address;
+        context.exclusive_size = static_cast<std::uint32_t>(transfer_size);
+        context.exclusive_version = version;
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
+    // STXR / STLXR (W/X): the local reservation must match both translated
+    // address and transfer size, and the shared reservation version must be
+    // unchanged. Any completed attempt consumes the local reservation.
+    if ((instruction & 0x3FE07C00U) == 0x08007C00U) {
+        const unsigned size = (instruction >> 30U) & 0x3U;
+        if (size < 2U) return StepResult::UnsupportedInstruction;
+        const std::size_t transfer_size = std::size_t{1} << size;
+        const unsigned status_register = (instruction >> 16U) & 0x1FU;
+        const unsigned target = instruction & 0x1FU;
+        const unsigned base_register = (instruction >> 5U) & 0x1FU;
+        const std::uint64_t address = read_base_register(context, base_register);
+        if ((address % transfer_size) != 0U) return StepResult::MemoryFault;
+
+        bool stored = false;
+        if (context.exclusive_monitor_valid &&
+            context.exclusive_size == transfer_size) {
+            std::array<std::uint8_t, 8U> bytes{};
+            const std::uint64_t value = read_register(context, target);
+            for (std::size_t byte = 0U; byte < transfer_size; ++byte)
+                bytes[byte] = static_cast<std::uint8_t>(
+                    (value >> (byte * 8U)) & 0xFFU);
+            if (!memory.write_exclusive(address,
+                    std::span<const std::uint8_t>(bytes.data(), transfer_size),
+                    context.exclusive_address, context.exclusive_version, stored)) {
+                return StepResult::MemoryFault;
+            }
+        }
+        context.clear_exclusive_monitor();
+        write_register(context, status_register, stored ? 0U : 1U, false);
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
+
     // Initial Advanced SIMD integer operations. This bounded subset supports
     // vector ADD/SUB for B/H/S/D lanes and vector AND/ORR/EOR at 64/128 bits.
     if ((instruction & 0xBF20FC00U) == 0x0E208400U ||

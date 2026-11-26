@@ -100,4 +100,48 @@ bool CpuMemory::write(const std::uint64_t address,
     return true;
 }
 
+bool CpuMemory::read_exclusive(const std::uint64_t address,
+    const std::span<std::uint8_t> output, std::uint64_t& physical_address,
+    std::uint64_t& version) const {
+    if (output.size() != 4U && output.size() != 8U) return false;
+    if (address_space_ == nullptr && stage1_mmu_ == nullptr) {
+        physical_address = address;
+        return physical_memory_.read_exclusive(address, output, version);
+    }
+    std::array<std::uint64_t, 8> physical_addresses{};
+    if (!translate_and_validate(address, output.size(), mmu::AccessType::Read,
+                                core::MemoryPermission::Read,
+                                physical_addresses)) return false;
+    for (std::size_t index = 1U; index < output.size(); ++index) {
+        if (physical_addresses[index] != physical_addresses[0] + index)
+            return false;
+    }
+    physical_address = physical_addresses[0];
+    return physical_memory_.read_exclusive(physical_address, output, version);
+}
+
+bool CpuMemory::write_exclusive(const std::uint64_t address,
+    const std::span<const std::uint8_t> input,
+    const std::uint64_t expected_physical_address,
+    const std::uint64_t expected_version, bool& stored) {
+    stored = false;
+    if (input.size() != 4U && input.size() != 8U) return false;
+    if (address_space_ == nullptr && stage1_mmu_ == nullptr) {
+        if (address != expected_physical_address) return true;
+        return physical_memory_.write_exclusive(
+            address, input, expected_version, stored);
+    }
+    std::array<std::uint64_t, 8> physical_addresses{};
+    if (!translate_and_validate(address, input.size(), mmu::AccessType::Write,
+                                core::MemoryPermission::Write,
+                                physical_addresses)) return false;
+    if (physical_addresses[0] != expected_physical_address) return true;
+    for (std::size_t index = 1U; index < input.size(); ++index) {
+        if (physical_addresses[index] != physical_addresses[0] + index)
+            return false;
+    }
+    return physical_memory_.write_exclusive(
+        physical_addresses[0], input, expected_version, stored);
+}
+
 } // namespace lucid::cpu

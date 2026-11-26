@@ -16,7 +16,7 @@ It runs a synthetic two-instruction program on each context and verifies indepen
 
 ## What is not implemented
 
-This is not a complete Cortex-A78C CPU core. All contexts use the existing incomplete A64 interpreter. The experiment does not provide native host-thread execution, real simultaneous execution, exclusive monitors, atomic instructions, cache coherency, memory barriers, per-core TLBs/MMUs, interrupt routing, core affinity, power/frequency states, or the full Switch 2 exception and system-register architecture.
+This is not a complete Cortex-A78C CPU core. All contexts use the existing incomplete A64 interpreter. The experiment does not provide native host-thread execution, real simultaneous execution, cache coherency, general memory barriers, per-core TLBs/MMUs, interrupt routing, core affinity, power/frequency states, or the full Switch 2 exception and system-register architecture. The shared MemoryBus now provides a conservative 16-byte-granule exclusive-reservation version model for sequential round-robin execution, but this is not host-thread-safe SMP.
 
 It is not integrated with the single-context \`core::Emulator\`, guest process runtime, or Horizon OS scheduler. The existing SVC dispatcher still reports virtual processor zero in its single-core execution path.
 

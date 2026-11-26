@@ -30,6 +30,17 @@ struct CpuContext {
     std::uint64_t instructions_retired{};
     CpuFlags flags{};
     arch::SystemRegisters system_registers{};
+    bool exclusive_monitor_valid{};
+    std::uint64_t exclusive_address{};
+    std::uint64_t exclusive_version{};
+    std::uint32_t exclusive_size{};
+
+    void clear_exclusive_monitor() noexcept {
+        exclusive_monitor_valid = false;
+        exclusive_address = 0U;
+        exclusive_version = 0U;
+        exclusive_size = 0U;
+    }
 
     [[nodiscard]] std::uint64_t pstate() const noexcept {
         const auto el = system_registers.current_el();

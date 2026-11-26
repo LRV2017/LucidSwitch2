@@ -59,6 +59,8 @@ void test_compatibility_reports() {
            "report the initial scalar floating-point subset as partial");
     expect(original_text.find("[partial] CPU / Advanced SIMD/NEON vector execution") != std::string::npos,
            "report the initial integer-vector NEON subset as partial");
+    expect(original_text.find("[partial] CPU / Atomics, exclusives, and pointer authentication") != std::string::npos,
+           "report the limited 32/64-bit exclusive-access subset as partial");
     expect(original_text.find("[metadata-only] Container / NSP/PFS0 directory inspection") != std::string::npos,
            "report NSP package directory inspection as metadata-only");
     expect(original_text.find("[partial] Executable / Restricted plaintext NRO homebrew execution") != std::string::npos,

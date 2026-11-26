@@ -24,6 +24,13 @@ public:
                                         std::span<std::uint8_t> output) const;
     [[nodiscard]] bool write(std::uint64_t address,
                              std::span<const std::uint8_t> input);
+    [[nodiscard]] bool read_exclusive(std::uint64_t address,
+        std::span<std::uint8_t> output, std::uint64_t& physical_address,
+        std::uint64_t& version) const;
+    [[nodiscard]] bool write_exclusive(std::uint64_t address,
+        std::span<const std::uint8_t> input,
+        std::uint64_t expected_physical_address,
+        std::uint64_t expected_version, bool& stored);
 
 private:
     [[nodiscard]] bool translate_and_validate(

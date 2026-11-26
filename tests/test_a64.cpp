@@ -760,6 +760,130 @@ int main() {
            simd_state.v[0].high == simd_unsupported_destination.high,
            "unsupported Advanced SIMD encoding leaves CPU state unchanged");
 
+
+    // Exclusive load/store reservations shared by cores through MemoryBus.
+    constexpr std::uint64_t exclusive_code = 0x7000U;
+    constexpr std::uint64_t exclusive_data = 0x8000U;
+    lucid::core::MemoryBus exclusive_memory;
+    expect(exclusive_memory.map_region(exclusive_code, 0x100U),
+           "map exclusive-access instruction fixture");
+    expect(exclusive_memory.map_region(exclusive_data, 0x100U),
+           "map shared data for exclusive-access fixture");
+    write32(exclusive_memory, exclusive_code + 0x00U, 0x885F7C20U); // LDXR W0,[X1]
+    write32(exclusive_memory, exclusive_code + 0x04U, 0x88027C23U); // STXR W2,W3,[X1]
+    write32(exclusive_memory, exclusive_code + 0x08U, 0xC85FFC24U); // LDAXR X4,[X1]
+    write32(exclusive_memory, exclusive_code + 0x0CU, 0xC805FC26U); // STLXR W5,X6,[X1]
+    write32(exclusive_memory, exclusive_code + 0x10U, 0xC85F7C27U); // LDXR X7,[X1]
+    write32(exclusive_memory, exclusive_code + 0x14U, 0xC8087C29U); // STXR W8,X9,[X1]
+    write32(exclusive_memory, exclusive_code + 0x18U, 0xD5033F5FU); // CLREX
+    write32(exclusive_memory, exclusive_code + 0x1CU, 0x880B7C2CU); // STXR W11,W12,[X1]
+
+    const auto store_u64 = [&exclusive_memory](const std::uint64_t value) {
+        std::array<std::uint8_t, 8U> bytes{};
+        for (std::size_t byte = 0U; byte < bytes.size(); ++byte)
+            bytes[byte] = static_cast<std::uint8_t>((value >> (byte * 8U)) & 0xFFU);
+        return exclusive_memory.write(exclusive_data, bytes);
+    };
+    const auto read_u64 = [&exclusive_memory]() {
+        std::array<std::uint8_t, 8U> bytes{};
+        expect(exclusive_memory.read(exclusive_data, bytes),
+               "read shared word after exclusive operation");
+        std::uint64_t value = 0U;
+        for (std::size_t byte = 0U; byte < bytes.size(); ++byte)
+            value |= static_cast<std::uint64_t>(bytes[byte]) << (byte * 8U);
+        return value;
+    };
+
+    lucid::cpu::CpuContext exclusive_state{};
+    exclusive_state.program_counter = exclusive_code;
+    exclusive_state.x[1] = exclusive_data;
+    exclusive_state.x[3] = 9U;
+    expect(store_u64(7U), "seed exclusive-access data word");
+    expect(cpu.step(exclusive_state, exclusive_memory) ==
+               lucid::cpu::StepResult::Executed,
+           "execute LDXR W and establish reservation");
+    expect(exclusive_state.x[0] == 7U &&
+           exclusive_state.exclusive_monitor_valid &&
+           exclusive_state.exclusive_size == 4U,
+           "LDXR reads a word and records a local reservation");
+    expect(cpu.step(exclusive_state, exclusive_memory) ==
+               lucid::cpu::StepResult::Executed,
+           "execute STXR W while the reservation remains valid");
+    expect(exclusive_state.x[2] == 0U &&
+           !exclusive_state.exclusive_monitor_valid &&
+           (read_u64() & 0xFFFFFFFFULL) == 9U,
+           "successful STXR stores the word and returns status zero");
+
+    expect(store_u64(11U), "reset data before testing reservation invalidation");
+    exclusive_state = lucid::cpu::CpuContext{};
+    exclusive_state.program_counter = exclusive_code;
+    exclusive_state.x[1] = exclusive_data;
+    exclusive_state.x[3] = 33U;
+    expect(cpu.step(exclusive_state, exclusive_memory) ==
+               lucid::cpu::StepResult::Executed,
+           "establish a reservation before an inter-core write");
+    const std::array<std::uint8_t, 8U> peer_value{
+        0x15U, 0U, 0U, 0U, 0U, 0U, 0U, 0U
+    };
+    expect(exclusive_memory.write(exclusive_data, peer_value),
+           "simulate a peer-core normal store to the reserved granule");
+    expect(cpu.step(exclusive_state, exclusive_memory) ==
+               lucid::cpu::StepResult::Executed,
+           "execute STXR after a peer-core write invalidates the reservation");
+    expect(exclusive_state.x[2] == 1U &&
+           (read_u64() & 0xFFFFFFFFULL) == 21U,
+           "failed STXR reports status one and preserves the peer's value");
+
+    expect(store_u64(0x1122334455667788ULL),
+           "seed a 64-bit acquire/release exclusive operation");
+    exclusive_state = lucid::cpu::CpuContext{};
+    exclusive_state.program_counter = exclusive_code + 0x08U;
+    exclusive_state.x[1] = exclusive_data;
+    exclusive_state.x[6] = 0x8877665544332211ULL;
+    expect(cpu.step(exclusive_state, exclusive_memory) ==
+               lucid::cpu::StepResult::Executed,
+           "execute LDAXR X acquire-exclusive load");
+    expect(exclusive_state.x[4] == 0x1122334455667788ULL &&
+           exclusive_state.exclusive_monitor_valid &&
+           exclusive_state.exclusive_size == 8U,
+           "LDAXR reads a doubleword and retains its reservation");
+    expect(cpu.step(exclusive_state, exclusive_memory) ==
+               lucid::cpu::StepResult::Executed,
+           "execute STLXR X release-exclusive store");
+    expect(exclusive_state.x[5] == 0U &&
+           read_u64() == 0x8877665544332211ULL,
+           "successful STLXR writes a doubleword and returns status zero");
+
+    exclusive_state = lucid::cpu::CpuContext{};
+    exclusive_state.program_counter = exclusive_code + 0x10U;
+    exclusive_state.x[1] = exclusive_data;
+    exclusive_state.x[9] = 0xAABBCCDDEEFF0011ULL;
+    expect(cpu.step(exclusive_state, exclusive_memory) ==
+               lucid::cpu::StepResult::Executed,
+           "execute 64-bit LDXR before CLREX");
+    expect(cpu.step(exclusive_state, exclusive_memory) ==
+               lucid::cpu::StepResult::Executed,
+           "execute CLREX and discard the reservation");
+    exclusive_state.program_counter = exclusive_code + 0x14U;
+    expect(cpu.step(exclusive_state, exclusive_memory) ==
+               lucid::cpu::StepResult::Executed,
+           "execute STXR after CLREX");
+    expect(exclusive_state.x[8] == 1U &&
+           read_u64() == 0x8877665544332211ULL,
+           "STXR after CLREX fails without modifying memory");
+
+    exclusive_state = lucid::cpu::CpuContext{};
+    exclusive_state.program_counter = exclusive_code;
+    exclusive_state.x[1] = exclusive_data + 1U;
+    const auto exclusive_fault_pc = exclusive_state.program_counter;
+    expect(cpu.step(exclusive_state, exclusive_memory) ==
+               lucid::cpu::StepResult::MemoryFault,
+           "reject a misaligned exclusive load");
+    expect(exclusive_state.program_counter == exclusive_fault_pc &&
+           !exclusive_state.exclusive_monitor_valid &&
+           exclusive_state.instructions_retired == 0U,
+           "misaligned exclusive load leaves CPU state unchanged");
+
     if (failures != 0) {
         std::cerr << failures << " A64 test(s) failed.\n";
         return 1;
