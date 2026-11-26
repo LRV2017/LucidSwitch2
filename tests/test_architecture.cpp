@@ -167,6 +167,7 @@ int main(){using namespace lucid;
  check(vm.unmap_page(0x1000)&&vm.mapped_pages()==0,"unmap page");
  arch::SystemRegisters regs;check(regs.write(arch::SystemRegister::VBAR_EL1,0x8000)==arch::RegisterAccess::Ok,"write VBAR");
  check(regs.write(arch::SystemRegister::CurrentEL,1)==arch::RegisterAccess::ReadOnly,"protect CurrentEL");
+ (void)regs.write(arch::SystemRegister::SPSel,1U);
  arch::ExceptionRouter router;auto vector=router.enter(regs,{arch::ExceptionKind::IRQ,1,0x1234,0x55,0xABC});
  check(vector==0x8280,"calculate EL1 IRQ vector");check(regs.read(arch::SystemRegister::ELR_EL1)==0x1234&&regs.read(arch::SystemRegister::FAR_EL1)==0xABC,"capture exception state");
  devices::InterruptController irq;check(irq.raise(7)&&irq.set_enabled(7,true)&&irq.pending(7),"raise enabled interrupt");

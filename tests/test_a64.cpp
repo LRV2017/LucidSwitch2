@@ -238,6 +238,7 @@ int main() {
     expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
            "execute MRS CurrentEL");
     expect(state.x[9] == 0U, "MRS CurrentEL returns the reset EL0 value");
+    state.system_registers.set_exception_level(1U);
     state.x[3] = 0x8000U;
     expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
            "execute MSR VBAR_EL1");
