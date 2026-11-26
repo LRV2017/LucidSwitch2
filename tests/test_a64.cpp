@@ -885,6 +885,28 @@ int main() {
            exclusive_state.instructions_retired == 0U,
            "misaligned exclusive load leaves CPU state unchanged");
 
+    // DMB/DSB/ISB complete as sequencing points in this synchronous
+    // interpreter: memory writes are immediate and each step fetches anew.
+    constexpr std::uint64_t barrier_code = base + 0xE0U;
+    write32(exclusive_memory, barrier_code + 0x00U, 0xD5033FBFU); // DMB SY
+    write32(exclusive_memory, barrier_code + 0x04U, 0xD5033F9FU); // DSB SY
+    write32(exclusive_memory, barrier_code + 0x08U, 0xD5033FDFU); // ISB SY
+    exclusive_state = lucid::cpu::CpuContext{};
+    exclusive_state.program_counter = barrier_code;
+    const auto retired_before_barriers = exclusive_state.instructions_retired;
+    expect(cpu.step(exclusive_state, exclusive_memory) ==
+               lucid::cpu::StepResult::Executed,
+           "execute DMB SY");
+    expect(cpu.step(exclusive_state, exclusive_memory) ==
+               lucid::cpu::StepResult::Executed,
+           "execute DSB SY");
+    expect(cpu.step(exclusive_state, exclusive_memory) ==
+               lucid::cpu::StepResult::Executed,
+           "execute ISB SY");
+    expect(exclusive_state.program_counter == barrier_code + 12U &&
+           exclusive_state.instructions_retired == retired_before_barriers + 3U,
+           "barriers retire in order and advance the instruction stream");
+
     if (failures != 0) {
         std::cerr << failures << " A64 test(s) failed.\n";
         return 1;

@@ -148,3 +148,10 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 
 - ADC/ADCS and SBC/SBCS are implemented for W/X registers with carry-in and borrow-in semantics and NZCV updates on flag-setting forms.
 - This does not make the integer core complete; several extended arithmetic, bitfield, atomic, system, and SIMD instruction groups remain missing.
+
+
+## AArch64 memory-barrier instruction subset
+
+- DMB and DSB encodings with non-reserved option fields, plus ISB SY, are recognized.
+- These instructions retire as sequencing points because the current interpreter executes one guest instruction at a time, memory writes complete synchronously, and instruction fetch is performed afresh for each step.
+- This does not implement host-thread fences, a weakly ordered guest memory model, cache maintenance, instruction-cache synchronization, or true SMP ordering. A concurrent CPU/JIT backend must replace this simplified behavior with an explicit architectural memory model.

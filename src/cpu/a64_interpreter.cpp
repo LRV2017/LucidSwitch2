@@ -223,6 +223,26 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
     const std::uint64_t next_pc = context.program_counter + 4U;
 
 
+    // DMB/DSB/ISB: in this interpreter every guest instruction completes
+    // synchronously, memory accesses are immediately visible, and instructions
+    // are fetched afresh on every step. The architectural ordering/completion
+    // points are therefore already satisfied by this single-threaded model.
+    // This is not a substitute for barriers in a future concurrent/JIT core.
+    const std::uint32_t barrier_encoding = instruction & 0xFFFFF0FFU;
+    const unsigned barrier_option = (instruction >> 8U) & 0xFU;
+    if ((barrier_encoding == 0xD50330BFU || // DMB <option>
+         barrier_encoding == 0xD503309FU) && // DSB <option>
+        barrier_option != 0U) {
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+    if (instruction == 0xD5033FDFU) { // ISB SY
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
     // CLREX: discard this core's local exclusive reservation.
     if (instruction == 0xD5033F5FU) {
         context.clear_exclusive_monitor();
