@@ -30,6 +30,7 @@ An experimental, clean-room emulator research project focused on building a lawf
 - NSP package import: a read-only PFS0 directory parser that validates package metadata and lists NCA, ticket, certificate, and other entries without reading/decrypting NCA content.
 - Phase 10 initial CPU expansion: 32 modeled 128-bit FP/SIMD registers and scalar single/double FMOV, FADD, FSUB, FMUL, and FDIV instructions; advanced vector NEON and FP control remain unsupported.
 - Phase 11 CPU expansion: MOVN, ADR/ADRP, logical-immediate decoding, CSEL-family instructions, integer division, variable shifts, multiply-accumulate, and link-register branches. This remains a partial integer core.
+- Kernel runtime foundation: bounded guest process/thread lifecycle, priority-based cooperative scheduling, wait/wake, and process-owned typed handles. This substrate is not a Horizon implementation and does not launch Switch applications.
 
 The LXP format is an original synthetic test container. It is not a Nintendo executable format and does not implement a guest operating system, syscalls, dynamic linking, or console services. See [docs/homebrew-format.md](docs/homebrew-format.md).
 

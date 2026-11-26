@@ -30,7 +30,7 @@ constexpr HardwareProfile kSwitch2{
     "Nintendo confirms custom NVIDIA processor; T239-level detail is community reverse-engineered"
 };
 
-constexpr std::array<CompatibilityFeature, 12U> kCommonFeatures{{
+constexpr std::array<CompatibilityFeature, 13U> kCommonFeatures{{
     {"CPU", "AArch64 scalar integer interpreter", ImplementationStatus::Partial,
      "MOVN, ADR/ADRP, logical immediates, conditional selects, division, variable shifts, multiply-accumulate and linked branches are covered; the instruction set remains incomplete."},
     {"CPU", "Scalar S/D floating-point and FMOV", ImplementationStatus::Partial,
@@ -45,8 +45,8 @@ constexpr std::array<CompatibilityFeature, 12U> kCommonFeatures{{
      "One constrained 4 KiB / 48-bit TTBR0 regime; not a complete target MMU."},
     {"System", "Exception entry and SVC handling", ImplementationStatus::Partial,
      "Selected SVC/IRQ paths exist; no complete privilege or system-call ABI."},
-    {"System", "Process, thread, handle, and scheduler model", ImplementationStatus::NotImplemented,
-     "No guest process runtime or scheduler."},
+    {"System", "Cooperative process/thread scheduler and handle table", ImplementationStatus::Partial,
+     "A bounded host-side test substrate supports process/thread lifecycle, priority scheduling, wait/wake, and per-process typed handles; it is not Horizon-compatible."},
     {"System", "HIPC/CMIF service manager and Horizon services", ImplementationStatus::NotImplemented,
      "No IPC sessions, named services, filesystem, audio, input, or display service implementations."},
     {"Graphics", "Guest console GPU command processor and shaders", ImplementationStatus::NotImplemented,

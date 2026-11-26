@@ -89,3 +89,10 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 - The interpreter adds MOVN, ADR/ADRP, logical immediates, CSEL/CSINC/CSINV/CSNEG, UDIV/SDIV, LSLV/LSRV/ASRV/RORV, MADD/MSUB, BL and BLR. This is still a small subset of ARMv8-A.
 - No Advanced SIMD/NEON vector instructions, atomic/exclusive memory operations, pointer authentication, broad load/store addressing modes, exception-syndrome completeness, or full system-register behavior are implemented.
 - These additional instructions are CPU groundwork; there is still no general NRO/NSO process loader, Horizon ABI, service manager, guest GPU, or commercial-game launch path.
+
+
+## Guest kernel runtime substrate
+
+- The new process/thread scheduler is deterministic and cooperative. It is not preemptive, has no timer quantum, and is not connected to automatic CPU execution.
+- Kernel handles are process-local typed identifiers only; event, mutex, semaphore, session, and transfer-memory objects do not yet implement their guest-visible behavior.
+- Address-space ownership, executable mapping, process launch parameters, TLS, SVC dispatch, HIPC/CMIF and Horizon services remain unimplemented.

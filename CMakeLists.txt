@@ -23,6 +23,7 @@ set(LUCID_HAS_VULKAN_PIPELINE_VALUE 0)
 add_library(lucid_core
     src/core/memory_bus.cpp
     src/core/emulator.cpp
+    src/kernel/runtime.cpp
     src/cpu/a64_interpreter.cpp
     src/cpu/cpu_memory.cpp
     src/arch/system_registers.cpp
@@ -137,6 +138,7 @@ if(LUCID_BUILD_TESTS)
         lucid_compatibility_tests
         lucid_nro_loader_tests
         lucid_nsp_package_tests
+        lucid_kernel_runtime_tests
     )
 
     add_executable(lucid_tests tests/test_main.cpp)
@@ -149,6 +151,7 @@ if(LUCID_BUILD_TESTS)
     add_executable(lucid_compatibility_tests tests/test_compatibility.cpp)
     add_executable(lucid_nro_loader_tests tests/test_nro_loader.cpp)
     add_executable(lucid_nsp_package_tests tests/test_nsp_package.cpp)
+    add_executable(lucid_kernel_runtime_tests tests/test_kernel_runtime.cpp)
 
     foreach(test_target IN LISTS LUCID_TEST_TARGETS)
         target_link_libraries(${test_target} PRIVATE lucid_core)
@@ -171,4 +174,5 @@ if(LUCID_BUILD_TESTS)
     add_test(NAME lucid_compatibility_tests COMMAND lucid_compatibility_tests)
     add_test(NAME lucid_nro_loader_tests COMMAND lucid_nro_loader_tests)
     add_test(NAME lucid_nsp_package_tests COMMAND lucid_nsp_package_tests)
+    add_test(NAME lucid_kernel_runtime_tests COMMAND lucid_kernel_runtime_tests)
 endif()
