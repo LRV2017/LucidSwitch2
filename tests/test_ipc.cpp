@@ -65,9 +65,9 @@ void test_parse_and_validate() {
     expect(!parse_raw_cmif_request(damaged, request, &error),
            "reject unsupported HIPC special headers and handle sections");
     damaged = make_request();
-    write32(damaged, 4U, 7U);
+    write32(damaged, 4U, 5U);
     expect(!parse_raw_cmif_request(damaged, request, &error),
-           "reject a raw-data section truncated before the CMIF payload");
+           "reject a raw-data section truncated before the CMIF header");
     damaged = make_request();
     write32(damaged, 16U, 0U);
     expect(!parse_raw_cmif_request(damaged, request, &error),
