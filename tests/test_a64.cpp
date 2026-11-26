@@ -509,6 +509,52 @@ int main() {
            state.instructions_retired == pair_fault_retired,
            "faulting LDP leaves both destination registers and PC unchanged");
 
+
+    // Unscaled and indexed single-register memory access forms.
+    write32(memory, base + 0xE4U, 0xF81F8020U); // STUR X0,[X1,#-8]
+    write32(memory, base + 0xE8U, 0xF85F8022U); // LDUR X2,[X1,#-8]
+    write32(memory, base + 0xECU, 0xF81F8C23U); // STR X3,[X1,#-8]!
+    write32(memory, base + 0xF0U, 0xF8408424U); // LDR X4,[X1],#8
+    write32(memory, base + 0xF4U, 0x389FF025U); // LDURSB X5,[X1,#-1]
+    state = lucid::cpu::CpuContext{};
+    state.program_counter = base + 0xE4U;
+    state.x[1] = base + 0xB0U;
+    state.x[0] = 0x123456789ABCDEF0ULL;
+    state.x[3] = 0x8877665544332211ULL;
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute STUR with a signed negative offset");
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute LDUR with a signed negative offset");
+    expect(state.x[2] == state.x[0],
+           "LDUR retrieves the value stored by STUR");
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute STR with pre-index writeback");
+    expect(state.x[1] == base + 0xA8U,
+           "pre-index STR updates the base register");
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute LDR with post-index writeback");
+    expect(state.x[4] == state.x[3] && state.x[1] == base + 0xB0U,
+           "post-index LDR loads before advancing the base register");
+    const std::array<std::uint8_t, 1U> signed_byte{0x80U};
+    expect(memory.write(base + 0xAFU, signed_byte),
+           "write a negative signed-byte load fixture");
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute LDURSB with sign extension");
+    expect(state.x[5] == 0xFFFFFFFFFFFFFF80ULL,
+           "LDURSB sign-extends an 8-bit value to X register width");
+
+    write32(memory, base + 0xF8U, 0xF81F8C23U); // STR X3,[X1,#-8]!
+    state.program_counter = base + 0xF8U;
+    state.x[1] = base + 4U;
+    const auto indexed_fault_base = state.x[1];
+    const auto indexed_fault_retired = state.instructions_retired;
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::MemoryFault,
+           "report a pre-index store outside mapped memory");
+    expect(state.x[1] == indexed_fault_base &&
+           state.program_counter == base + 0xF8U &&
+           state.instructions_retired == indexed_fault_retired,
+           "faulting pre-index store leaves base and CPU state unchanged");
+
     if (failures != 0) {
         std::cerr << failures << " A64 test(s) failed.\n";
         return 1;

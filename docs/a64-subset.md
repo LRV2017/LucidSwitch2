@@ -18,6 +18,7 @@ LucidSwitch2 contains an independently written, deliberately incomplete A64 inte
 - BR, BLR and RET
 - BR and RET
 - Unsigned-offset LDR and STR for 8-, 16-, 32-, and 64-bit values
+- Unscaled, pre-index and post-index scalar integer LDR/STR, including signed byte/halfword/word loads for selected destination widths
 - Integer LDP/STP register pairs (W/X forms) with signed-offset, pre-index and post-index addressing, including LDPSW
 - MRS and MSR for the selected system-register bank (CurrentEL, DAIF, SPSel, and selected EL1 registers)
 - Scalar S/D floating-point arithmetic: FADD, FSUB, FMUL, and FDIV
@@ -40,7 +41,7 @@ The CPU-visible memory facade can translate every byte either through the standa
 
 ## Not implemented
 
-This is still a small subset. Scalar FP arithmetic uses host IEEE single/double operations and does not model FPCR/FPSR, architectural rounding control, FP exception flags/traps, denormal modes, or full NaN behavior. No vector/NEON arithmetic, lane operations, vector loads/stores, or vector crypto are implemented. Pair loads/stores currently support only general-purpose registers, not SIMD/FP register pairs. The interpreter also lacks exception entry/return completeness, full EL/security state, system-instruction traps, ASIDs, TTBR1, additional granule sizes, full TLB maintenance, caches, atomics/exclusives, most A64 addressing modes, signed loads, and the complete instruction set. The stage-1 walker is not a complete ARMv8-A MMU and the interpreter is not sufficient to boot an operating system or commercial console software. Only the listed modeled system registers are decoded; all other encodings remain unsupported.
+This is still a small subset. Scalar FP arithmetic uses host IEEE single/double operations and does not model FPCR/FPSR, architectural rounding control, FP exception flags/traps, denormal modes, or full NaN behavior. No vector/NEON arithmetic, lane operations, vector loads/stores, or vector crypto are implemented. Pair loads/stores currently support only general-purpose registers, not SIMD/FP register pairs. The interpreter also lacks exception entry/return completeness, full EL/security state, system-instruction traps, ASIDs, TTBR1, additional granule sizes, full TLB maintenance, caches, atomics/exclusives, register-offset addressing, SIMD/FP memory operations, unprivileged access, exclusive/atomic operations, and the complete instruction set. The stage-1 walker is not a complete ARMv8-A MMU and the interpreter is not sufficient to boot an operating system or commercial console software. Only the listed modeled system registers are decoded; all other encodings remain unsupported.
 
 ## Test strategy
 

@@ -116,3 +116,9 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 
 - Integer LDP/STP supports W/X pairs with signed-offset, pre-index, and post-index addressing. SIMD/FP pair loads/stores and non-temporal pair forms remain unsupported.
 - Pair accesses use one bounded memory operation; faulting loads leave destination registers and writeback state unchanged. The wider load/store instruction family is still incomplete.
+
+
+## AArch64 scalar load/store addressing
+
+- Scalar unscaled, pre-index and post-index integer forms are supported for selected byte/halfword/word/doubleword transfers, including sign-extending loads.
+- Register-offset addressing, SIMD/FP vector memory operations, unprivileged access, exclusive/atomic operations, and other addressing forms remain unsupported.
