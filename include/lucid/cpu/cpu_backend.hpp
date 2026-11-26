@@ -1,6 +1,8 @@
 #pragma once
 
+#include "lucid/arch/system_registers.hpp"
 #include "lucid/core/memory_bus.hpp"
+#include "lucid/cpu/cpu_memory.hpp"
 
 #include <array>
 #include <cstdint>
@@ -21,6 +23,7 @@ struct CpuContext {
     std::uint64_t program_counter{};
     std::uint64_t instructions_retired{};
     CpuFlags flags{};
+    arch::SystemRegisters system_registers{};
 };
 
 enum class StepResult {
@@ -29,7 +32,8 @@ enum class StepResult {
     Halted,
     UnsupportedInstruction,
     MemoryFault,
-    MisalignedProgramCounter
+    MisalignedProgramCounter,
+    SystemRegisterFault
 };
 
 // A deliberately incomplete A64 interpreter. It implements only the
@@ -50,6 +54,8 @@ public:
         CpuContext& context,
         core::MemoryBus& memory
     ) override;
+
+    [[nodiscard]] StepResult step(CpuContext& context, CpuMemory& memory);
 
     [[nodiscard]] std::string_view name() const noexcept override {
         return "Lucid A64 subset interpreter";

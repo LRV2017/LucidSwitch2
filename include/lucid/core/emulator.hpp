@@ -1,6 +1,7 @@
 #pragma once
 #include "lucid/core/memory_bus.hpp"
 #include "lucid/cpu/cpu_backend.hpp"
+#include "lucid/mmu/address_space.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -28,11 +29,14 @@ public:
     [[nodiscard]] cpu::CpuContext& cpu_context() noexcept;
     [[nodiscard]] const MemoryBus& memory_bus() const noexcept;
     [[nodiscard]] MemoryBus& memory_bus() noexcept;
+    [[nodiscard]] const mmu::AddressSpace& address_space() const noexcept;
+    [[nodiscard]] mmu::AddressSpace& address_space() noexcept;
     [[nodiscard]] cpu::StepResult last_step_result() const noexcept;
 private:
     SessionState state_{SessionState::Cold};
     EmulatorConfig config_{};
     MemoryBus memory_{};
+    mmu::AddressSpace address_space_{};
     cpu::A64Interpreter cpu_{};
     cpu::CpuContext cpu_context_{};
     cpu::StepResult last_step_result_{cpu::StepResult::Executed};

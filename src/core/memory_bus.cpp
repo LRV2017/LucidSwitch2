@@ -126,6 +126,17 @@ bool MemoryBus::write(std::uint64_t address, std::span<const std::uint8_t> input
               region->bytes.begin() + static_cast<std::ptrdiff_t>(offset));
     return true;
 }
+bool MemoryBus::can_access(std::uint64_t address, std::size_t size,
+                            MemoryPermission permission) const noexcept {
+    if (size == 0U) return true;
+    const Region* region = find_region(address);
+    if (region == nullptr || !has_permission(region->permissions, permission)) {
+        return false;
+    }
+    const auto offset = static_cast<std::size_t>(address - region->base);
+    return offset <= region->bytes.size() &&
+        size <= region->bytes.size() - offset;
+}
 bool MemoryBus::read8(std::uint64_t address, std::uint8_t& value,
                       std::string* error) const {
     return read(address, std::span<std::uint8_t>(&value, 1U), error);

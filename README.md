@@ -18,10 +18,11 @@ An experimental, clean-room emulator research project focused on building a lawf
 - Checked memory regions with read, write, and execute permissions.
 - CPU context with 31 general-purpose registers, SP, PC, retired-instruction count, and NZCV flags.
 - Bounded emulator execution loop with program loading, pause-on-budget, resume, stop, and explicit CPU fault reporting.
-- Small A64 interpreter subset: NOP, MOVZ, MOVK, immediate and shifted-register ADD/SUB, selected logical operations, NZCV updates, common branches, and unsigned-offset scalar LDR/STR.
+- Small A64 interpreter subset: NOP, MOVZ, MOVK, immediate and shifted-register ADD/SUB, selected logical operations, NZCV updates, common branches, unsigned-offset scalar LDR/STR, and selected MRS/MSR system-register accesses.
+- Translation-aware CPU memory facade: instruction fetches and data accesses pass through 4 KiB virtual-page mappings with read/write/execute checks; emulator sessions use an identity-mapped guest range.
 - Synthetic instruction and emulator integration tests.
 
-The interpreter is an educational foundation, not a complete ARMv8-A CPU. See docs/a64-subset.md and docs/known-limitations.md.
+The interpreter is an educational foundation, not a complete ARMv8-A CPU. The current address map is a software mapping table, not an ARM hardware page-table walker or TLB. See docs/a64-subset.md and docs/known-limitations.md.
 
 ## Build
 

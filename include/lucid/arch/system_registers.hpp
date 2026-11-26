@@ -12,6 +12,8 @@ public:
  bool valid(SystemRegister reg) const noexcept;
 private: std::array<std::uint64_t,static_cast<std::size_t>(SystemRegister::Count)> values_{};
 };
+[[nodiscard]] bool decode_system_register(std::uint16_t encoding,
+                                           SystemRegister& reg) noexcept;
 enum class ExceptionKind : std::uint8_t { Synchronous, IRQ, FIQ, SError };
 struct ExceptionRecord { ExceptionKind kind{ExceptionKind::Synchronous}; std::uint8_t source_el{}; std::uint64_t return_address{},syndrome{},fault_address{}; };
 class ExceptionRouter final { public: std::uint64_t enter(SystemRegisters&,const ExceptionRecord&) const noexcept; };

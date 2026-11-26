@@ -1,4 +1,5 @@
 #include "lucid/cpu/cpu_backend.hpp"
+#include "lucid/arch/system_registers.hpp"
 
 #include <array>
 #include <cstdint>
@@ -141,7 +142,7 @@ void set_sub_flags(CpuContext& context, const std::uint64_t left,
     }
 }
 
-[[nodiscard]] bool fetch_instruction(core::MemoryBus& memory,
+[[nodiscard]] bool fetch_instruction(CpuMemory& memory,
                                      const std::uint64_t pc,
                                      std::uint32_t& instruction) {
     std::array<std::uint8_t, 4> bytes{};
@@ -159,6 +160,11 @@ void set_sub_flags(CpuContext& context, const std::uint64_t left,
 } // namespace
 
 StepResult A64Interpreter::step(CpuContext& context, core::MemoryBus& memory) {
+    CpuMemory cpu_memory(memory);
+    return step(context, cpu_memory);
+}
+
+StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
     if ((context.program_counter & 3U) != 0U) {
         return StepResult::MisalignedProgramCounter;
     }
@@ -171,6 +177,44 @@ StepResult A64Interpreter::step(CpuContext& context, core::MemoryBus& memory) {
     const std::uint64_t next_pc = context.program_counter + 4U;
 
     if (instruction == 0xD503201FU) { // NOP
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
+    // MRS (read system register): only the explicitly modelled register bank
+    // is accepted. Other architectural system registers remain unsupported.
+    if ((instruction & 0xFFE00000U) == 0xD5200000U) {
+        const auto encoding = static_cast<std::uint16_t>((instruction >> 5U) & 0xFFFFU);
+        arch::SystemRegister system_register{};
+        if (!arch::decode_system_register(encoding, system_register)) {
+            return StepResult::UnsupportedInstruction;
+        }
+        const unsigned destination = instruction & 0x1FU;
+        write_register(context, destination,
+                       context.system_registers.read(system_register), true);
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
+    // MSR (write system register): read-only and unmodelled registers fail
+    // explicitly rather than silently changing architectural state.
+    if ((instruction & 0xFFE00000U) == 0xD5000000U) {
+        const auto encoding = static_cast<std::uint16_t>((instruction >> 5U) & 0xFFFFU);
+        arch::SystemRegister system_register{};
+        if (!arch::decode_system_register(encoding, system_register)) {
+            return StepResult::UnsupportedInstruction;
+        }
+        const unsigned source = instruction & 0x1FU;
+        const auto access = context.system_registers.write(
+            system_register, read_register(context, source));
+        if (access == arch::RegisterAccess::ReadOnly) {
+            return StepResult::SystemRegisterFault;
+        }
+        if (access != arch::RegisterAccess::Ok) {
+            return StepResult::UnsupportedInstruction;
+        }
         context.program_counter = next_pc;
         ++context.instructions_retired;
         return StepResult::Executed;

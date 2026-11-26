@@ -1,5 +1,7 @@
 #include "lucid/core/memory_bus.hpp"
 #include "lucid/cpu/cpu_backend.hpp"
+#include "lucid/cpu/cpu_memory.hpp"
+#include "lucid/mmu/address_space.hpp"
 
 #include <array>
 #include <cstdint>
@@ -218,6 +220,93 @@ int main() {
     state.program_counter = 0x9000U;
     expect(cpu.step(state, memory) == lucid::cpu::StepResult::MemoryFault,
            "report instruction fetch outside mapped memory");
+
+    // MRS/MSR access only the explicitly modelled system-register bank.
+    const std::uint32_t mrs_current_el =
+        0xD5200000U | (0xC212U << 5U) | 9U;
+    const std::uint32_t msr_vbar =
+        0xD5000000U | (0xC600U << 5U) | 3U;
+    const std::uint32_t mrs_vbar =
+        0xD5200000U | (0xC600U << 5U) | 4U;
+    const std::uint32_t msr_current_el =
+        0xD5000000U | (0xC212U << 5U) | 3U;
+    write32(memory, base + 0xD0U, mrs_current_el);
+    write32(memory, base + 0xD4U, msr_vbar);
+    write32(memory, base + 0xD8U, mrs_vbar);
+    write32(memory, base + 0xDCU, msr_current_el);
+    state.program_counter = base + 0xD0U;
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute MRS CurrentEL");
+    expect(state.x[9] == 0U, "MRS CurrentEL returns the reset EL0 value");
+    state.x[3] = 0x8000U;
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute MSR VBAR_EL1");
+    expect(state.system_registers.read(lucid::arch::SystemRegister::VBAR_EL1) == 0x8000U,
+           "MSR updates the selected VBAR register");
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute MRS VBAR_EL1");
+    expect(state.x[4] == 0x8000U, "MRS reads back VBAR_EL1");
+    state.program_counter = base + 0xDCU;
+    const auto system_fault_pc = state.program_counter;
+    const auto system_fault_retired = state.instructions_retired;
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::SystemRegisterFault,
+           "reject writes to read-only CurrentEL");
+    expect(state.program_counter == system_fault_pc &&
+           state.instructions_retired == system_fault_retired,
+           "faulting MSR leaves PC and retired count unchanged");
+
+    // The CPU memory facade now translates instruction fetches and data accesses.
+    lucid::core::MemoryBus physical_memory;
+    expect(physical_memory.map_region(0x3000U, 0x1000U),
+           "map physical code page");
+    expect(physical_memory.map_region(0x9000U, 0x1000U),
+           "map physical data page");
+    write32(physical_memory, 0x3000U, 0xF9400020U); // LDR X0,[X1]
+    write32(physical_memory, 0x3004U, 0xF9000422U); // STR X2,[X1,#8]
+    const std::array<std::uint8_t, 8> initial_data{
+        0x88U, 0x77U, 0x66U, 0x55U, 0x44U, 0x33U, 0x22U, 0x11U
+    };
+    expect(physical_memory.write(0x9000U, initial_data),
+           "seed translated physical data");
+    lucid::mmu::AddressSpace translated_space;
+    expect(translated_space.map_page(0x10000U, 0x3000U, true, false, true),
+           "map virtual executable page");
+    expect(translated_space.map_page(0x20000U, 0x9000U, true, true, false),
+           "map virtual read/write data page");
+    lucid::cpu::CpuMemory translated_memory(physical_memory, &translated_space);
+    lucid::cpu::CpuContext translated_state{};
+    translated_state.program_counter = 0x10000U;
+    translated_state.x[1] = 0x20000U;
+    translated_state.x[2] = 0xAABBCCDDEEFF0011ULL;
+    expect(cpu.step(translated_state, translated_memory) ==
+               lucid::cpu::StepResult::Executed,
+           "fetch and execute through virtual-to-physical translation");
+    expect(translated_state.x[0] == 0x1122334455667788ULL,
+           "translated LDR reads from the physical page");
+    expect(cpu.step(translated_state, translated_memory) ==
+               lucid::cpu::StepResult::Executed,
+           "translated STR writes to the physical page");
+    std::array<std::uint8_t, 8> stored_data{};
+    expect(physical_memory.read(0x9008U, stored_data) &&
+           stored_data[0] == 0x11U && stored_data[7] == 0xAAU,
+           "translated STR updates physical backing memory");
+
+    expect(translated_space.unmap_page(0x20000U) &&
+           translated_space.map_page(0x20000U, 0x9000U, true, false, false),
+           "remap data page as read-only");
+    translated_state.program_counter = 0x10004U;
+    const auto translation_fault_pc = translated_state.program_counter;
+    const auto translation_fault_retired = translated_state.instructions_retired;
+    expect(cpu.step(translated_state, translated_memory) ==
+               lucid::cpu::StepResult::MemoryFault,
+           "translated store obeys page write permissions");
+    expect(translated_state.program_counter == translation_fault_pc &&
+           translated_state.instructions_retired == translation_fault_retired,
+           "faulting translated store leaves CPU state unchanged");
+    translated_state.program_counter = 0x20000U;
+    expect(cpu.step(translated_state, translated_memory) ==
+               lucid::cpu::StepResult::MemoryFault,
+           "instruction fetch obeys page execute permissions");
 
     if (failures != 0) {
         std::cerr << failures << " A64 test(s) failed.\n";

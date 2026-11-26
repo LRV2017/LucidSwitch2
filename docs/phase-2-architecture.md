@@ -12,18 +12,24 @@ This milestone adds independently testable building blocks. It is not a complete
 - MMIO device interface and checked, non-overlapping device bus.
 - Browser frontend prototype with home/library/settings, metadata-only local file import, and Gamepad API detection.
 
-## Not yet integrated
+## CPU integration added in v0.5.0
 
-The A64 interpreter still accesses the generic MemoryBus directly. AddressSpace is a separately tested translation component, not an ARM hardware descriptor walker or TLB. ExceptionRouter models selected EL1 state and vector offsets; it does not implement exception-level transitions, ERET, banked state, or full exception routing. SystemRegisters are not yet connected to MRS/MSR decoding. Timer outputs are not yet wired to interrupt lines, and the interrupt controller is not yet wired into CPU exception entry. MMIO devices are not yet mapped into the CPU load/store path.
+The A64 interpreter now has a CPU-visible memory facade that translates instruction fetches and data loads/stores through `AddressSpace`, checks execute/read/write permissions, and preflights stores before committing them. The `Emulator` session maps its configured guest range identity-to-identity and executes through that translation path. Selected MRS/MSR encodings now read/write the existing system-register bank, with read-only CurrentEL writes rejected explicitly.
+
+This remains a software page map, not an ARM stage-1 descriptor walker, TLB, ASID implementation, or full architectural fault model. Emulator sessions currently establish identity mappings; custom virtual/physical maps are exercised through the CPU memory interface in tests.
+
+## Still not integrated
+
+ExceptionRouter still only captures selected EL1 state and calculates vector offsets; it does not perform exception-level transitions, ERET, banked state, or complete exception routing. Timer outputs are not yet wired to interrupt lines, the interrupt controller is not wired into CPU exception entry, and MMIO devices are not mapped into the CPU load/store path. The frontend remains a browser prototype, not a native desktop application.
 
 The frontend is a browser prototype, not a native desktop application. It stores selected file names and sizes in browser local storage; it does not retain file contents, parse/decrypt packages, or launch games.
 
 ## Remaining architecture integration
 
-1. Implement an ARMv8 stage-1 descriptor walker, TLB, ASIDs, and architectural translation faults.
-2. Route CPU instruction fetch and every load/store through translation.
-3. Implement exception levels, exception return, MRS/MSR and system-instruction traps.
+1. Implement an ARMv8 stage-1 descriptor walker, TLB, ASIDs, and architectural translation faults; replace the current identity-map bootstrap when architectural page tables are ready.
+2. Expand MRS/MSR coverage and implement system-instruction traps with privilege checks.
+3. Implement exception levels, vector entry, exception return, and banked state.
 4. Connect virtual timer output to interrupt lines and route interrupts to CPU exception entry.
 5. Define documented MMIO register maps and connect device bus to guest loads/stores.
-6. Add deterministic architectural tests and reference vectors.
+6. Add deterministic architectural tests and reference vectors, ideally cross-checked against an independent reference implementation.
 7. Choose a native GUI framework and connect its library model to a local-only, verified content loader.

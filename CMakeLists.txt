@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(LucidSwitch2
-    VERSION 0.4.0
+    VERSION 0.5.0
     DESCRIPTION "Clean-room console emulation research scaffold"
     LANGUAGES CXX
 )
@@ -12,6 +12,7 @@ add_library(lucid_core
     src/core/memory_bus.cpp
     src/core/emulator.cpp
     src/cpu/a64_interpreter.cpp
+    src/cpu/cpu_memory.cpp
     src/arch/system_registers.cpp
     src/mmu/address_space.cpp
     src/devices/interrupt_controller.cpp

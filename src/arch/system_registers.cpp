@@ -2,6 +2,23 @@
 namespace lucid::arch {
 std::uint64_t SystemRegisters::read(SystemRegister r) const noexcept { auto i=static_cast<std::size_t>(r); return i<values_.size()?values_[i]:0U; }
 bool SystemRegisters::valid(SystemRegister r) const noexcept { return static_cast<std::size_t>(r)<values_.size(); }
+bool decode_system_register(const std::uint16_t encoding,
+                             SystemRegister& reg) noexcept {
+ switch (encoding) {
+ case 0xC212U: reg=SystemRegister::CurrentEL; return true;
+ case 0xDA11U: reg=SystemRegister::DAIF; return true;
+ case 0xC210U: reg=SystemRegister::SPSel; return true;
+ case 0xC201U: reg=SystemRegister::ELR_EL1; return true;
+ case 0xC290U: reg=SystemRegister::ESR_EL1; return true;
+ case 0xC300U: reg=SystemRegister::FAR_EL1; return true;
+ case 0xC600U: reg=SystemRegister::VBAR_EL1; return true;
+ case 0xC080U: reg=SystemRegister::SCTLR_EL1; return true;
+ case 0xC100U: reg=SystemRegister::TTBR0_EL1; return true;
+ case 0xC102U: reg=SystemRegister::TCR_EL1; return true;
+ case 0xC510U: reg=SystemRegister::MAIR_EL1; return true;
+ default: return false;
+ }
+}
 RegisterAccess SystemRegisters::write(SystemRegister r,std::uint64_t v) noexcept {
  if(!valid(r)) return RegisterAccess::Invalid;
  if(r==SystemRegister::CurrentEL) return RegisterAccess::ReadOnly;

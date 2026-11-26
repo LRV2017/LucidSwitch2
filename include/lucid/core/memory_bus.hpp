@@ -26,6 +26,8 @@ public:
         std::span<std::uint8_t> output, std::string* error = nullptr) const;
     [[nodiscard]] bool write(std::uint64_t address,
         std::span<const std::uint8_t> input, std::string* error = nullptr);
+    [[nodiscard]] bool can_access(std::uint64_t address, std::size_t size,
+        MemoryPermission permission) const noexcept;
     [[nodiscard]] bool read8(std::uint64_t address, std::uint8_t& value,
         std::string* error = nullptr) const;
     [[nodiscard]] bool write8(std::uint64_t address, std::uint8_t value,

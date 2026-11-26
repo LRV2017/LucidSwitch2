@@ -9,7 +9,8 @@ LucidSwitch2 is an early clean-room emulator research project. Its host-side cor
 - Application shell (src/main.cpp): command-line help, version, self-test, and synthetic CPU execution demo.
 - Core session (lucid::core::Emulator): initializes guest memory, loads caller-supplied bytes, runs the CPU for a bounded instruction budget, supports resume/stop, and reports CPU faults.
 - Memory bus (lucid::core::MemoryBus): checked host-side regions with read, write, and execute permissions.
-- CPU interpreter (lucid::cpu::A64Interpreter): selected A64 instructions for synthetic programs; see a64-subset.md.
+- CPU interpreter (lucid::cpu::A64Interpreter): selected A64 instructions for synthetic programs, including translation-aware fetch/load/store and selected MRS/MSR encodings; see a64-subset.md.
+- CPU memory facade (lucid::cpu::CpuMemory): optional virtual-to-physical translation and access-permission enforcement using the software AddressSpace map.
 - Graphics contract (lucid::gpu::GraphicsBackend): future host rendering boundary only; no guest GPU command processor or renderer exists.
 
 ## Design constraints
@@ -25,10 +26,10 @@ LucidSwitch2 is an early clean-room emulator research project. Its host-side cor
 ## Current execution flow
 
 1. Caller initializes EmulatorConfig with a guest memory range and entry point.
-2. Emulator maps that range and initializes the A64 CPU context.
+2. Emulator maps that range, creates identity mappings for its guest pages, and initializes the A64 CPU context.
 3. Caller loads a synthetic byte sequence into mapped memory.
-4. run(instruction_budget) executes at most the requested number of instructions.
-5. Emulator pauses at the budget or enters Faulted on an unsupported instruction or access fault.
+4. run(instruction_budget) executes at most the requested number of instructions; CPU fetches and data accesses pass through the translation-aware memory facade.
+5. Emulator pauses at the budget or enters Faulted on an unsupported instruction, system-register write fault, or access/translation fault.
 
 The instruction budget is a host safety mechanism, not a guest timing model.
 
@@ -39,4 +40,4 @@ Build a proper decoder/test corpus and add broader, specification-backed A64 cov
 
 ## Phase 2 components
 
-See [phase-2-architecture.md](phase-2-architecture.md) for the system-register, exception, address-space, timer, interrupt, MMIO, and frontend prototype status. These components are not yet fully wired into the A64 execution path.
+See [phase-2-architecture.md](phase-2-architecture.md) for the system-register, exception, address-space, timer, interrupt, MMIO, and frontend prototype status. Translation-aware CPU memory access and selected MRS/MSR instructions are now integrated; exception routing, timers, interrupts, and MMIO remain separate building blocks.

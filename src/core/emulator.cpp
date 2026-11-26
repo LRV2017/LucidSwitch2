@@ -31,6 +31,19 @@ bool Emulator::initialize(const EmulatorConfig& config, std::string* error) {
         return false;
     }
     if (!memory_.map_region(config.memory_base, config.memory_size, error)) return false;
+    const std::uint64_t first_page =
+        config.memory_base & ~(mmu::AddressSpace::PageSize - 1U);
+    const std::uint64_t last_address =
+        config.memory_base + size64 - 1U;
+    const std::uint64_t last_page =
+        last_address & ~(mmu::AddressSpace::PageSize - 1U);
+    for (std::uint64_t page = first_page;; page += mmu::AddressSpace::PageSize) {
+        if (!address_space_.map_page(page, page, true, true, true)) {
+            set_error(error, "Could not establish the emulator's identity-mapped guest pages.");
+            return false;
+        }
+        if (page == last_page) break;
+    }
     config_ = config;
     cpu_context_ = {};
     cpu_context_.program_counter = config.entry_point;
@@ -57,7 +70,8 @@ RunResult Emulator::run(std::uint64_t instruction_budget) noexcept {
     if (instruction_budget == 0U) return RunResult::InvalidState;
     state_ = SessionState::Running;
     for (std::uint64_t count = 0; count < instruction_budget; ++count) {
-        last_step_result_ = cpu_.step(cpu_context_, memory_);
+        cpu::CpuMemory execution_memory(memory_, &address_space_);
+        last_step_result_ = cpu_.step(cpu_context_, execution_memory);
         if (last_step_result_ != cpu::StepResult::Executed &&
             last_step_result_ != cpu::StepResult::Branch) {
             state_ = SessionState::Faulted;
@@ -77,6 +91,8 @@ const cpu::CpuContext& Emulator::cpu_context() const noexcept { return cpu_conte
 cpu::CpuContext& Emulator::cpu_context() noexcept { return cpu_context_; }
 const MemoryBus& Emulator::memory_bus() const noexcept { return memory_; }
 MemoryBus& Emulator::memory_bus() noexcept { return memory_; }
+const mmu::AddressSpace& Emulator::address_space() const noexcept { return address_space_; }
+mmu::AddressSpace& Emulator::address_space() noexcept { return address_space_; }
 cpu::StepResult Emulator::last_step_result() const noexcept { return last_step_result_; }
 const char* to_string(SessionState state) noexcept {
     switch (state) {
@@ -106,6 +122,7 @@ const char* to_string(cpu::StepResult result) noexcept {
     case cpu::StepResult::UnsupportedInstruction: return "unsupported instruction";
     case cpu::StepResult::MemoryFault: return "memory fault";
     case cpu::StepResult::MisalignedProgramCounter: return "misaligned program counter";
+    case cpu::StepResult::SystemRegisterFault: return "system register access fault";
     }
     return "unknown";
 }
