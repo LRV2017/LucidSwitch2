@@ -638,6 +638,47 @@ int main() {
            state.instructions_retired == literal_fault_retired,
            "faulting literal load leaves CPU state unchanged");
 
+
+    // ADC/ADCS and SBC/SBCS consume and update NZCV carry semantics.
+    write32(memory, base + 0x28U, 0x9A020020U); // ADC X0,X1,X2
+    write32(memory, base + 0x2CU, 0xBA050083U); // ADCS X3,X4,X5
+    write32(memory, base + 0x30U, 0xDA0800E6U); // SBC X6,X7,X8
+    write32(memory, base + 0x34U, 0xFA0B0149U); // SBCS X9,X10,X11
+    state = lucid::cpu::CpuContext{};
+    state.program_counter = base + 0x28U;
+    state.x[1] = 5U;
+    state.x[2] = 7U;
+    state.x[4] = 0x7FFFFFFFFFFFFFFFULL;
+    state.x[5] = 0U;
+    state.x[7] = 10U;
+    state.x[8] = 3U;
+    state.x[10] = 3U;
+    state.x[11] = 5U;
+    state.flags = {true, false, true, true};
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute ADC with carry-in");
+    expect(state.x[0] == 13U && state.flags.negative &&
+           !state.flags.zero && state.flags.carry && state.flags.overflow,
+           "ADC consumes carry-in without changing NZCV flags");
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute ADCS and update NZCV flags");
+    expect(state.x[3] == 0x8000000000000000ULL &&
+           state.flags.negative && !state.flags.zero &&
+           !state.flags.carry && state.flags.overflow,
+           "ADCS reports signed overflow when adding carry to max positive");
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute SBC with borrow-in");
+    expect(state.x[6] == 6U && state.flags.negative &&
+           !state.flags.carry && state.flags.overflow,
+           "SBC consumes inverted carry as borrow without changing flags");
+    state.flags.carry = true;
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute SBCS without borrow-in");
+    expect(state.x[9] == 0xFFFFFFFFFFFFFFFEULL &&
+           state.flags.negative && !state.flags.zero &&
+           !state.flags.carry && !state.flags.overflow,
+           "SBCS updates negative, carry and overflow for a negative result");
+
     if (failures != 0) {
         std::cerr << failures << " A64 test(s) failed.\n";
         return 1;

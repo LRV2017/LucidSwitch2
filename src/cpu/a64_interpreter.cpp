@@ -412,6 +412,59 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
         return StepResult::Executed;
     }
 
+
+    // ADC/ADCS and SBC/SBCS with carry-in / borrow-in semantics.
+    if ((instruction & 0x1FE0FC00U) == 0x1A000000U) {
+        const bool is_64_bit = (instruction >> 31U) != 0U;
+        const bool subtract = (instruction & 0x40000000U) != 0U;
+        const bool set_flags = (instruction & 0x20000000U) != 0U;
+        const unsigned destination = instruction & 0x1FU;
+        const unsigned left_index = (instruction >> 5U) & 0x1FU;
+        const unsigned right_index = (instruction >> 16U) & 0x1FU;
+        const std::uint64_t mask = width_mask(is_64_bit);
+        const unsigned sign_bit = is_64_bit ? 63U : 31U;
+        const std::uint64_t left = read_register(context, left_index) & mask;
+        const std::uint64_t right = read_register(context, right_index) & mask;
+        std::uint64_t result = 0U;
+        bool carry_out = false;
+        if (!subtract) {
+            const std::uint64_t carry_in = context.flags.carry ? 1U : 0U;
+            if (is_64_bit) {
+                const std::uint64_t first = left + right;
+                const bool first_carry = first < left;
+                result = first + carry_in;
+                const bool second_carry = result < first;
+                carry_out = first_carry || second_carry;
+            } else {
+                const std::uint64_t full = left + right + carry_in;
+                result = full & mask;
+                carry_out = full > mask;
+            }
+        } else {
+            const std::uint64_t borrow_in = context.flags.carry ? 0U : 1U;
+            result = (left - right - borrow_in) & mask;
+            carry_out = borrow_in == 0U ? left >= right : left > right;
+        }
+
+        write_register(context, destination, result, is_64_bit);
+        if (set_flags) {
+            context.flags.negative =
+                ((result >> sign_bit) & 1U) != 0U;
+            context.flags.zero = result == 0U;
+            context.flags.carry = carry_out;
+            if (!subtract) {
+                context.flags.overflow =
+                    (((~(left ^ right) & (left ^ result)) >> sign_bit) & 1U) != 0U;
+            } else {
+                context.flags.overflow =
+                    ((((left ^ right) & (left ^ result)) >> sign_bit) & 1U) != 0U;
+            }
+        }
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
     // Conditional select family: CSEL, CSINC, CSINV and CSNEG.
     if ((instruction & 0x1FE00000U) == 0x1A800000U) {
         const bool is_64_bit = (instruction >> 31U) != 0U;

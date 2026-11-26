@@ -13,7 +13,7 @@ LucidSwitch2 contains an independently written, deliberately incomplete A64 inte
 - ADD/SUB (shifted register) and flag-setting variants
 - AND, ORR, EOR, and ANDS (shifted-register and logical-immediate forms), including common MOV register alias encoding
 - CSEL, CSINC, CSINV and CSNEG conditional-select instructions
-- UDIV/SDIV, LSLV/LSRV/ASRV/RORV, and MADD/MSUB
+- ADC/ADCS, SBC/SBCS, UDIV/SDIV, LSLV/LSRV/ASRV/RORV, and MADD/MSUB
 - B, BL, B.cond, CBZ, and CBNZ
 - PC-relative LDR W/X, LDRSW literal loads, plus PRFM literal as a no-op hint
 - BR, BLR and RET

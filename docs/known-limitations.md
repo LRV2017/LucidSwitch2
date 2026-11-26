@@ -141,3 +141,9 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 
 - PC-relative LDR W, LDR X, and LDRSW literal loads are supported. PRFM literal is treated as a no-op hint.
 - SIMD/FP literal loads and full prefetch/cache-hint behavior remain unsupported.
+
+
+## AArch64 carry arithmetic
+
+- ADC/ADCS and SBC/SBCS are implemented for W/X registers with carry-in and borrow-in semantics and NZCV updates on flag-setting forms.
+- This does not make the integer core complete; several extended arithmetic, bitfield, atomic, system, and SIMD instruction groups remain missing.
