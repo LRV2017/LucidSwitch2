@@ -183,6 +183,36 @@ void test_mod0_relative_relocation() {
     (void)std::filesystem::remove(path, ignored);
 }
 
+
+void test_mod0_relr_relative_relocations() {
+    using namespace lucid::switchfmt;
+    const auto path = std::filesystem::temp_directory_path() /
+                      "lucidswitch2-mod0-relr.nro";
+    auto bytes = make_relocated_nro();
+    write_u64(bytes, 0x160U, 36U);  // DT_RELR
+    write_u64(bytes, 0x168U, 0x1A0U);
+    write_u64(bytes, 0x170U, 35U); // DT_RELRSZ
+    write_u64(bytes, 0x178U, 16U);
+    write_u64(bytes, 0x1A0U, 0x1C0U); // direct target, then bitmap target
+    write_u64(bytes, 0x1A8U, 0x3U);   // bit zero relocates next 8-byte slot
+    write_u32(bytes, 0xA8U, 0xF9400420U); // LDR X0,[X1,#8]
+
+    expect(write_fixture(path, bytes),
+           "write an NRO with a direct RELR entry and a following bitmap");
+    NroHomebrewRunReport report{};
+    std::string error;
+    const bool loaded = run_restricted_nro_homebrew(path, 16U, report, &error);
+    expect(loaded, "load an NRO using bounded relative RELR relocations");
+    if (loaded) {
+        expect(report.relocations_applied == 2U,
+               "apply one direct and one bitmap RELR relocation");
+        expect(report.register_x0 == report.image_base,
+               "execute code that reads a pointer relocated by the RELR bitmap");
+    }
+    std::error_code ignored;
+    (void)std::filesystem::remove(path, ignored);
+}
+
 void test_reject_unsupported_profiles() {
     using namespace lucid::switchfmt;
     std::error_code ignored;
@@ -235,6 +265,7 @@ void test_reject_unsupported_profiles() {
 int main() {
     test_restricted_nro_execution();
     test_mod0_relative_relocation();
+    test_mod0_relr_relative_relocations();
     test_reject_unsupported_profiles();
     if (failures != 0) {
         std::cerr << failures << " restricted NRO runner test(s) failed.\n";
