@@ -16,3 +16,8 @@ This document is intentionally blunt so the project's maturity is not overstated
 - The emulator execution loop runs synthetic programs loaded through its API; it is not a commercial game loader.
 - A successful build, self-test, or CPU demo is not proof that console software can boot or run.
 - No Nintendo Switch 2 hardware compatibility or commercial game compatibility is claimed.
+
+
+## Graphics foundation
+
+The guest GPU memory class is bounded host-backed storage, not a hardware memory controller. The command processor supports only an original test packet format for begin-frame, clear, filled rectangle, present, and end. The software backend is the only renderer that rasterizes. The optional Vulkan backend creates a Vulkan device and performs off-screen RGBA8 image uploads; it does not yet implement shader translation, GPU rasterization, a surface/swapchain, or console-specific GPU behavior. Vulkan is enabled only when the SDK is detected at CMake configure time.

@@ -23,6 +23,9 @@ An experimental, clean-room emulator research project focused on building a lawf
 - Limited ARM stage-1 support: 4 KiB granule, 48-bit lower VA / 48-bit PA, TTBR0_EL1, L0-L3 walks, L1/L2 blocks, L3 pages, access-flag and EL1 permission checks, and explicit TLB invalidation.
 - Synthetic instruction and emulator integration tests.
 - Limited exception model: EL0/EL1 state, SVC entry, EL1 vector routing, SPSR_EL1/ELR_EL1 save-and-restore, ERET, and deterministic timer-driven IRQ delivery.
+- GPU command foundation: bounded guest GPU memory, validated frame/clear/rectangle/present command buffers, deterministic software rasterization and pixel readback, plus optional Vulkan device-local off-screen image upload.
+
+The graphics path is a clean-room test renderer, not Switch 2 GPU emulation. It currently rasterizes on the CPU; the optional Vulkan backend uploads reference frames to a device-local image but does not execute guest shaders or use a swapchain.
 
 The exception path is also deliberately limited: it models SVC and IRQ entry to EL1 plus ERET back to EL0/EL1, but it is not a complete PSTATE, exception-syndrome, or interrupt-controller implementation.
 
@@ -33,6 +36,7 @@ The interpreter and MMU are educational foundations, not a complete ARMv8-A impl
 Requirements:
 - CMake 3.20 or newer
 - A C++20 compiler (Visual Studio 2022 17.4+, Clang 15+, or GCC 12+)
+- Optional: Vulkan SDK for the off-screen Vulkan upload backend; the software renderer works without it
 
 ### Windows (PowerShell)
 
@@ -42,6 +46,7 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 .\build\Release\lucidswitch2.exe --self-test
 .\build\Release\lucidswitch2.exe --run
+.\build\Release\lucidswitch2.exe --gpu-info
 ```
 
 ### Linux / macOS
