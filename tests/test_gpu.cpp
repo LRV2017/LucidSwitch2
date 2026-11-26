@@ -274,8 +274,8 @@ void test_guest_indexed_command_stream() {
 }
 
 void test_window_presenter_configuration() {
-    const bool available = WindowPresenter::compiled_with_sdl2();
-    WindowPresenter presenter;
+    const bool available = lucid::gpu::WindowPresenter::compiled_with_sdl2();
+    lucid::gpu::WindowPresenter presenter;
     std::string error;
     if (!available) {
         expect(!presenter.initialize("LucidSwitch2 test", 64U, 64U, &error),

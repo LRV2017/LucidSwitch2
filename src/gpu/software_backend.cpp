@@ -191,8 +191,8 @@ std::uint32_t SoftwareBackend::sample_texture(const Texture& texture,
 
     if (texture.sampler.min_filter == TextureFilter::Nearest &&
         texture.sampler.mag_filter == TextureFilter::Nearest) {
-        const auto x = static_cast<int>(std::floor(u * texture.width));
-        const auto y = static_cast<int>(std::floor(v * texture.height));
+        const auto x = static_cast<int>(std::floor(u * static_cast<float>(texture.width)));
+        const auto y = static_cast<int>(std::floor(v * static_cast<float>(texture.height)));
         return pixel_at(x, y);
     }
 
