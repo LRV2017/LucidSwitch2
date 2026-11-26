@@ -1,16 +1,20 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(LucidSwitch2
-    VERSION 0.8.0
+    VERSION 0.9.0
     DESCRIPTION "Clean-room console emulation research scaffold"
     LANGUAGES CXX
 )
 
 option(LUCID_BUILD_TESTS "Build the LucidSwitch2 test suite" ON)
 option(LUCID_ENABLE_VULKAN "Enable the optional Vulkan device upload backend when the SDK is available" ON)
+option(LUCID_ENABLE_SDL2 "Enable the optional SDL2 desktop frame presenter when available" ON)
 
 if(LUCID_ENABLE_VULKAN)
     find_package(Vulkan QUIET)
+endif()
+if(LUCID_ENABLE_SDL2)
+    find_package(SDL2 QUIET)
 endif()
 
 add_library(lucid_core
@@ -28,6 +32,7 @@ add_library(lucid_core
     src/gpu/command_processor.cpp
     src/gpu/software_backend.cpp
     src/gpu/vulkan_backend.cpp
+    src/gpu/window_presenter.cpp
 )
 
 target_include_directories(lucid_core
@@ -44,6 +49,22 @@ if(LUCID_ENABLE_VULKAN AND Vulkan_FOUND)
 else()
     target_compile_definitions(lucid_core PRIVATE LUCID_HAS_VULKAN=0)
     message(STATUS "LucidSwitch2: Vulkan SDK not found; software renderer remains available")
+endif()
+
+if(LUCID_ENABLE_SDL2 AND SDL2_FOUND)
+    if(TARGET SDL2::SDL2)
+        target_link_libraries(lucid_core PRIVATE SDL2::SDL2)
+    elseif(TARGET SDL2::SDL2-static)
+        target_link_libraries(lucid_core PRIVATE SDL2::SDL2-static)
+    else()
+        target_include_directories(lucid_core PRIVATE ${SDL2_INCLUDE_DIRS})
+        target_link_libraries(lucid_core PRIVATE ${SDL2_LIBRARIES})
+    endif()
+    target_compile_definitions(lucid_core PRIVATE LUCID_HAS_SDL2=1)
+    message(STATUS "LucidSwitch2: SDL2 detected; optional desktop frame presenter enabled")
+else()
+    target_compile_definitions(lucid_core PRIVATE LUCID_HAS_SDL2=0)
+    message(STATUS "LucidSwitch2: SDL2 not found; headless rendering remains available")
 endif()
 
 if(MSVC)

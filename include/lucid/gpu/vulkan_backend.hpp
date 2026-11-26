@@ -5,15 +5,15 @@
 
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 
 namespace lucid::gpu {
 
-// Optional off-screen Vulkan upload backend. The current command stream is
-// rasterized by SoftwareBackend and uploaded to a Vulkan device-local image;
-// this establishes device/queue/resource plumbing without claiming a native
-// GPU shader pipeline or window-system swapchain.
+// Optional off-screen Vulkan device integration. The renderer exposes the
+// same geometry/texture API on every platform; hardware rasterization is
+// reported only by builds that include the native Vulkan graphics pipeline.
 class VulkanBackend final : public GraphicsBackend {
 public:
     VulkanBackend();
@@ -31,8 +31,21 @@ public:
                                    std::string* error = nullptr) override;
     [[nodiscard]] bool clear(std::uint32_t rgba,
                              std::string* error = nullptr) override;
+    [[nodiscard]] bool clear_depth(float depth,
+                                   std::string* error = nullptr) override;
     [[nodiscard]] bool draw_rect(const GraphicsRect& rect, std::uint32_t rgba,
                                  std::string* error = nullptr) override;
+    [[nodiscard]] bool create_texture(TextureId id, std::uint32_t width,
+                                      std::uint32_t height,
+                                      std::span<const std::uint32_t> pixels,
+                                      const SamplerDesc& sampler = {},
+                                      std::string* error = nullptr) override;
+    [[nodiscard]] bool destroy_texture(TextureId id,
+                                       std::string* error = nullptr) override;
+    [[nodiscard]] bool draw_indexed(std::span<const GraphicsVertex> vertices,
+                                    std::span<const std::uint32_t> indices,
+                                    TextureId texture = 0U,
+                                    std::string* error = nullptr) override;
     [[nodiscard]] bool present_frame(std::string* error = nullptr) override;
     [[nodiscard]] bool readback(std::span<std::uint32_t> pixels,
                                 std::string* error = nullptr) const override;

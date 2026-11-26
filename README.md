@@ -23,9 +23,9 @@ An experimental, clean-room emulator research project focused on building a lawf
 - Limited ARM stage-1 support: 4 KiB granule, 48-bit lower VA / 48-bit PA, TTBR0_EL1, L0-L3 walks, L1/L2 blocks, L3 pages, access-flag and EL1 permission checks, and explicit TLB invalidation.
 - Synthetic instruction and emulator integration tests.
 - Limited exception model: EL0/EL1 state, SVC entry, EL1 vector routing, SPSR_EL1/ELR_EL1 save-and-restore, ERET, and deterministic timer-driven IRQ delivery.
-- GPU command foundation: bounded guest GPU memory, validated frame/clear/rectangle/present command buffers, deterministic software rasterization and pixel readback, plus optional Vulkan device-local off-screen image upload.
+- Graphics pipeline foundation: indexed vertex/index buffers, triangle rasterization, color/depth attachments, texture resources with nearest/linear sampling and clamp/repeat address modes, validated guest GPU commands, optional Vulkan off-screen uploads, and SDL2 desktop frame presentation.
 
-The graphics path is a clean-room test renderer, not Switch 2 GPU emulation. It currently rasterizes on the CPU; the optional Vulkan backend uploads reference frames to a device-local image but does not execute guest shaders or use a swapchain.
+The graphics path is a clean-room renderer foundation, not Switch 2 GPU emulation. Indexed triangles, depth testing, and texture sampling are currently rasterized by the CPU reference backend. The optional Vulkan backend uploads completed frames to a device-local image but does not yet rasterize with a native Vulkan shader pipeline or swapchain. SDL2 can display frame readbacks in a desktop window.
 
 The exception path is also deliberately limited: it models SVC and IRQ entry to EL1 plus ERET back to EL0/EL1, but it is not a complete PSTATE, exception-syndrome, or interrupt-controller implementation.
 
@@ -36,7 +36,7 @@ The interpreter and MMU are educational foundations, not a complete ARMv8-A impl
 Requirements:
 - CMake 3.20 or newer
 - A C++20 compiler (Visual Studio 2022 17.4+, Clang 15+, or GCC 12+)
-- Optional: Vulkan SDK for the off-screen Vulkan upload backend; the software renderer works without it
+- Optional: Vulkan SDK for off-screen device uploads and SDL2 for the desktop preview window; the software renderer works without either
 
 ### Windows (PowerShell)
 
@@ -47,6 +47,8 @@ ctest --test-dir build -C Release --output-on-failure
 .\build\Release\lucidswitch2.exe --self-test
 .\build\Release\lucidswitch2.exe --run
 .\build\Release\lucidswitch2.exe --gpu-info
+.\build\Release\lucidswitch2.exe --graphics-demo
+.\build\Release\lucidswitch2.exe --graphics-demo --window
 ```
 
 ### Linux / macOS
@@ -57,6 +59,9 @@ cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ./build/lucidswitch2 --self-test
 ./build/lucidswitch2 --run
+./build/lucidswitch2 --gpu-info
+./build/lucidswitch2 --graphics-demo
+./build/lucidswitch2 --graphics-demo --window
 ```
 
 The --run command executes a tiny synthetic branch-loop demo for a bounded number of instructions. It does not load a game.
@@ -67,7 +72,7 @@ The --run command executes a tiny synthetic branch-loop demo for a bounded numbe
 2. CPU research: validate more A64 instruction groups using public specifications and differential test vectors.
 3. Architecture research: document publicly observable hardware requirements and define testable interfaces.
 4. System emulation: add documented exceptions, system registers, memory translation, timers, interrupts, and device abstractions.
-5. Graphics research: design a backend around public graphics standards, then validate with original test scenes.
+5. Graphics foundation: indexed geometry, depth framebuffer, texture and sampler resources, guest command buffers, and optional desktop preview; native Vulkan shader execution and swapchain work remain future milestones.
 6. Homebrew test environment: define a documented, original test format and sample programs with no proprietary code or assets.
 7. Compatibility work: only after the above, test legally obtained user-provided software and publish reproducible results.
 

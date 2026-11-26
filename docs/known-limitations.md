@@ -21,3 +21,8 @@ This document is intentionally blunt so the project's maturity is not overstated
 ## Graphics foundation
 
 The guest GPU memory class is bounded host-backed storage, not a hardware memory controller. The command processor supports only an original test packet format for begin-frame, clear, filled rectangle, present, and end. The software backend is the only renderer that rasterizes. The optional Vulkan backend creates a Vulkan device and performs off-screen RGBA8 image uploads; it does not yet implement shader translation, GPU rasterization, a surface/swapchain, or console-specific GPU behavior. Vulkan is enabled only when the SDK is detected at CMake configure time.
+
+
+## Graphics pipeline (Phase 5)
+
+The reference renderer now supports indexed triangle lists, a color and floating-point depth framebuffer, texture resources, nearest/bilinear filtering, and clamp/repeat sampler addressing. The guest command parser supports create/destroy texture and indexed draws. SDL2 window presentation displays a CPU readback of the completed frame. The Vulkan backend still uses CPU rasterization and synchronous staging uploads; no native Vulkan shader pipeline or swapchain is present yet.

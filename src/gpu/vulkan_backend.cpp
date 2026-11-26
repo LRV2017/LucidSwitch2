@@ -436,6 +436,31 @@ bool VulkanBackend::draw_rect(const GraphicsRect& rect,
 #endif
 }
 
+bool VulkanBackend::clear_depth(const float depth, std::string* error) {
+    return reference_renderer_.clear_depth(depth, error);
+}
+
+bool VulkanBackend::create_texture(const TextureId id,
+                                   const std::uint32_t width,
+                                   const std::uint32_t height,
+                                   const std::span<const std::uint32_t> pixels,
+                                   const SamplerDesc& sampler,
+                                   std::string* error) {
+    return reference_renderer_.create_texture(id, width, height, pixels,
+                                               sampler, error);
+}
+
+bool VulkanBackend::destroy_texture(const TextureId id, std::string* error) {
+    return reference_renderer_.destroy_texture(id, error);
+}
+
+bool VulkanBackend::draw_indexed(
+    const std::span<const GraphicsVertex> vertices,
+    const std::span<const std::uint32_t> indices,
+    const TextureId texture, std::string* error) {
+    return reference_renderer_.draw_indexed(vertices, indices, texture, error);
+}
+
 bool VulkanBackend::present_frame(std::string* error) {
 #if LUCID_HAS_VULKAN
     if (!initialized_ || !reference_renderer_.present_frame(error)) return false;
@@ -458,10 +483,11 @@ bool VulkanBackend::readback(const std::span<std::uint32_t> pixels,
 
 GraphicsCapabilities VulkanBackend::capabilities() const noexcept {
 #if LUCID_HAS_VULKAN
-    return {false, true,
-        "CPU reference rasterization with Vulkan device-local RGBA8 image upload"};
+    return {false, true, true, true, false,
+        "CPU indexed reference rasterization with Vulkan device-local RGBA8 image upload"};
 #else
-    return {false, false, "Vulkan SDK was not available when this build was configured"};
+    return {false, false, true, true, false,
+        "Vulkan SDK was not available; indexed geometry and textures use the CPU reference renderer"};
 #endif
 }
 
