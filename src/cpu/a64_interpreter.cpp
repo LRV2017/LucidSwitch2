@@ -307,13 +307,14 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
     // only the S and D scalar lanes; vector/NEON operations and FPCR/FPSR
     // architectural control are intentionally not implied.
     const std::uint32_t fp_opcode = instruction & 0xFFE0FC00U;
+    const std::uint32_t fp_move_opcode = instruction & 0xFFFFFC00U;
     const unsigned fp_destination = instruction & 0x1FU;
     const unsigned fp_source_n = (instruction >> 5U) & 0x1FU;
     const unsigned fp_source_m = (instruction >> 16U) & 0x1FU;
 
-    if (fp_opcode == 0x1E270000U || fp_opcode == 0x9E670000U) {
+    if (fp_move_opcode == 0x1E270000U || fp_move_opcode == 0x9E670000U) {
         // FMOV Sd,Wn / FMOV Dd,Xn (bit-preserving general-to-FP transfer).
-        const bool is_double = fp_opcode == 0x9E670000U;
+        const bool is_double = fp_move_opcode == 0x9E670000U;
         context.v[fp_destination].low = is_double
             ? read_register(context, fp_source_n)
             : (read_register(context, fp_source_n) & 0xFFFFFFFFULL);
@@ -323,9 +324,9 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
         return StepResult::Executed;
     }
 
-    if (fp_opcode == 0x1E260000U || fp_opcode == 0x9E660000U) {
+    if (fp_move_opcode == 0x1E260000U || fp_move_opcode == 0x9E660000U) {
         // FMOV Wd,Sn / FMOV Xd,Dn (bit-preserving FP-to-general transfer).
-        const bool is_double = fp_opcode == 0x9E660000U;
+        const bool is_double = fp_move_opcode == 0x9E660000U;
         write_register(context, fp_destination,
                        context.v[fp_source_n].low, is_double);
         context.program_counter = next_pc;
@@ -333,9 +334,9 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
         return StepResult::Executed;
     }
 
-    if (fp_opcode == 0x1E204000U || fp_opcode == 0x1E604000U) {
+    if (fp_move_opcode == 0x1E204000U || fp_move_opcode == 0x1E604000U) {
         // FMOV Sd,Sn / FMOV Dd,Dn (scalar lane copy).
-        const bool is_double = fp_opcode == 0x1E604000U;
+        const bool is_double = fp_move_opcode == 0x1E604000U;
         context.v[fp_destination].low = is_double
             ? context.v[fp_source_n].low
             : (context.v[fp_source_n].low & 0xFFFFFFFFULL);
