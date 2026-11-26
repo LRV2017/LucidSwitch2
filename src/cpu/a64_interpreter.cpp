@@ -608,6 +608,57 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
     }
 
 
+
+    // PC-relative literal loads for W/X registers and LDRSW. PRFM is a
+    // non-memory hint in this subset and retires as a no-op.
+    if ((instruction & 0x3B000000U) == 0x18000000U) {
+        if ((instruction & 0x04000000U) != 0U)
+            return StepResult::UnsupportedInstruction;
+        const unsigned opc = (instruction >> 30U) & 0x3U;
+        const unsigned target = instruction & 0x1FU;
+        const std::int64_t displacement =
+            sign_extend((instruction >> 5U) & 0x7FFFFU, 19U) * 4;
+        const std::uint64_t pc = context.program_counter;
+        std::uint64_t address = pc;
+        if (displacement < 0) {
+            const std::uint64_t magnitude =
+                static_cast<std::uint64_t>(-displacement);
+            if (magnitude > pc) return StepResult::MemoryFault;
+            address = pc - magnitude;
+        } else {
+            const std::uint64_t amount =
+                static_cast<std::uint64_t>(displacement);
+            if (pc > std::numeric_limits<std::uint64_t>::max() - amount)
+                return StepResult::MemoryFault;
+            address = pc + amount;
+        }
+
+        if (opc == 3U) { // PRFM literal: prefetch hints have no data result.
+            context.program_counter = next_pc;
+            ++context.instructions_retired;
+            return StepResult::Executed;
+        }
+
+        const std::size_t transfer_size = opc == 1U ? 8U : 4U;
+        std::array<std::uint8_t, 8U> bytes{};
+        if (!memory.read(address, std::span<std::uint8_t>(
+                bytes.data(), transfer_size)))
+            return StepResult::MemoryFault;
+        std::uint64_t value = 0U;
+        for (std::size_t byte = 0U; byte < transfer_size; ++byte)
+            value |= static_cast<std::uint64_t>(bytes[byte]) << (byte * 8U);
+        if (opc == 2U) {
+            value = static_cast<std::uint64_t>(
+                sign_extend(value, 32U));
+            write_register(context, target, value, true);
+        } else {
+            write_register(context, target, value, opc == 1U);
+        }
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
     // Integer LDP/STP register pairs: signed offset, pre-index and post-index.
     // The SIMD/FP pair encoding (V=1) and non-temporal mode are not implemented.
     if ((instruction & 0x3A000000U) == 0x28000000U) {

@@ -15,6 +15,7 @@ LucidSwitch2 contains an independently written, deliberately incomplete A64 inte
 - CSEL, CSINC, CSINV and CSNEG conditional-select instructions
 - UDIV/SDIV, LSLV/LSRV/ASRV/RORV, and MADD/MSUB
 - B, BL, B.cond, CBZ, and CBNZ
+- PC-relative LDR W/X, LDRSW literal loads, plus PRFM literal as a no-op hint
 - BR, BLR and RET
 - BR and RET
 - Unsigned-offset LDR and STR for 8-, 16-, 32-, and 64-bit values

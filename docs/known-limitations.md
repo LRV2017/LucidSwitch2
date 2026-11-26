@@ -135,3 +135,9 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 - SVC 0x10 returns virtual processor 0 because the current execution model has one CPU.
 - SVC 0x1E returns the deterministic virtual timer counter. The counter currently advances one tick per guest instruction and is not calibrated to the Switch hardware counter frequency.
 - Other SVC numbers are not dispatched and remain on the guest EL1 vector path. WaitSynchronization (0x18), IPC send/receive, thread/process creation and termination, mutex/event semantics, memory mapping/query calls, and the remainder of the Horizon SVC table are not implemented.
+
+
+## AArch64 literal loads
+
+- PC-relative LDR W, LDR X, and LDRSW literal loads are supported. PRFM literal is treated as a no-op hint.
+- SIMD/FP literal loads and full prefetch/cache-hint behavior remain unsupported.

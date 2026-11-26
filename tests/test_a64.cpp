@@ -593,6 +593,51 @@ int main() {
     expect(state.x[4] == 0x1122334455667788ULL,
            "SXTW register-offset load applies a signed negative index");
 
+
+    // PC-relative literal loads: LDR X, LDR W, LDRSW and PRFM.
+    write32(memory, base + 0x10U, 0x58000380U); // LDR X0, [PC,#0x70]
+    write32(memory, base + 0x14U, 0x180003A1U); // LDR W1, [PC,#0x74]
+    write32(memory, base + 0x18U, 0x980003A2U); // LDRSW X2, [PC,#0x74]
+    write32(memory, base + 0x1CU, 0xD80003A3U); // PRFM [PC,#0x74]
+    const std::array<std::uint8_t, 8U> literal_x{
+        0x88U, 0x77U, 0x66U, 0x55U, 0x44U, 0x33U, 0x22U, 0x11U
+    };
+    const std::array<std::uint8_t, 4U> literal_w{
+        0xDDU, 0xCCU, 0xBBU, 0xAAU
+    };
+    const std::array<std::uint8_t, 4U> literal_signed{
+        0x80U, 0xFFU, 0xFFU, 0xFFU
+    };
+    expect(memory.write(base + 0x80U, literal_x),
+           "seed a 64-bit PC-relative literal");
+    expect(memory.write(base + 0x88U, literal_w),
+           "seed a 32-bit PC-relative literal");
+    expect(memory.write(base + 0x8CU, literal_signed),
+           "seed a sign-extended PC-relative literal");
+    state = lucid::cpu::CpuContext{};
+    state.program_counter = base + 0x10U;
+    for (unsigned index = 0U; index < 4U; ++index) {
+        expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+               "execute an A64 literal load or prefetch hint");
+    }
+    expect(state.x[0] == 0x1122334455667788ULL,
+           "LDR X loads a 64-bit PC-relative literal");
+    expect(state.x[1] == 0xAABBCCDDU,
+           "LDR W zero-extends a 32-bit PC-relative literal");
+    expect(state.x[2] == 0xFFFFFFFFFFFFFF80ULL,
+           "LDRSW sign-extends a 32-bit PC-relative literal");
+    expect(state.instructions_retired == 4U,
+           "PRFM literal retires as a non-memory hint");
+
+    write32(memory, base + 0x20U, 0x587FFFE3U); // LDR X3, far outside mapping.
+    state.program_counter = base + 0x20U;
+    const auto literal_fault_retired = state.instructions_retired;
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::MemoryFault,
+           "report a PC-relative literal load outside mapped memory");
+    expect(state.program_counter == base + 0x20U &&
+           state.instructions_retired == literal_fault_retired,
+           "faulting literal load leaves CPU state unchanged");
+
     if (failures != 0) {
         std::cerr << failures << " A64 test(s) failed.\n";
         return 1;
