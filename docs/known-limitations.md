@@ -57,7 +57,7 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 
 - Only plaintext, uncompressed NRO0 with a zero flags field is accepted. NSO0 is metadata-only.
 - The NRO-start branch must be an A64 B-immediate instruction that targets the validated .text segment.
-- Files with a nonzero MOD0 pointer are rejected until MOD0 parsing, dynamic relocation, and linking exist.
+- MOD0 parsing supports only bounded, symbol-free AArch64 RELATIVE/NONE RELA entries and RELR relative relocations; other relocation types are rejected.
 - The runner uses a fixed 64 KiB stack, bounded guest memory, and a maximum 10,000,000-instruction budget.
 - The emulated CPU supports only the documented A64 subset. Real homebrew commonly depends on many instructions and services not implemented here.
 - The current implementation uses one coarse RWX guest RAM mapping; it does not yet enforce per-segment text/rodata/data page permissions.
@@ -103,3 +103,10 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 - The parser supports only raw-data-only HIPC frames and CMIF Request/RequestWithContext messages. Pointer/static descriptors, send/receive/exchange buffers, PID, special headers, and copy/move handles are rejected.
 - CMIF domain headers and domain object routing are not supported. The service registry is a host dispatch abstraction, not Horizon service-manager emulation.
 - No real guest TLS command buffer, SVC IPC calls, HIPC session/handle lifecycle, TIPC, or named Horizon service implementation exists.
+
+
+## NRO MOD0 relocation subset
+
+- The loader validates a MOD0 header, BSS start/end offsets, and a bounded DT_* table.
+- RELA supports only R_AARCH64_NONE and symbol-free R_AARCH64_RELATIVE. RELR supports bounded relative pointer adjustments.
+- Symbol-based relocations, PLT/GOT symbol resolution, imported modules, versioning, exception metadata, RELRO permission transitions, and LNY extension behavior are not implemented.

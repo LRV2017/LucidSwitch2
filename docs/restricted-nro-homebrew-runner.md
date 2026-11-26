@@ -22,7 +22,9 @@ The instruction budget is optional (default 100,000) and is capped at 10,000,000
 - NRO compression variants are not supported.
 - NRO-start offset 0 must contain a direct A64 B-immediate instruction.
 - The branch target must be aligned and fall inside the validated .text segment.
-- The MOD0 pointer must be zero. Nonzero MOD0 metadata is rejected because the loader does not yet perform dynamic relocations or linking.
+- A nonzero MOD0 pointer must identify a valid MOD0 header and bounded dynamic table.
+- Supports symbol-free R_AARCH64_RELATIVE and R_AARCH64_NONE RELA entries, plus relative-only RELR tables. Other symbol or relocation types are rejected.
+- BSS start/end offsets are validated against the NRO BSS size; the memory image is zero-extended before relocation.
 - The image, zero-filled BSS, and a 64 KiB stack are placed in a bounded guest memory region.
 - Execution uses the project's small A64 instruction subset and stops at a host instruction budget.
 
@@ -31,7 +33,7 @@ The instruction budget is optional (default 100,000) and is capped at 10,000,000
 The documented NRO Homebrew ABI places the entry point at binary_ptr + 0, where the branch stub jumps past the NRO0 header. NRO applications receive a loader-config pointer in X0 and 0xFFFFFFFFFFFFFFFF in X1. This prototype passes a null loader-config pointer and the documented X1 sentinel. No loader-config entries or handles are provided.
 
 The runtime does not implement:
-- MOD0 processing, relocations, dynamic imports, module loading, or symbol resolution;
+- Symbol-based relocations, dynamic imports, module loading, external symbol resolution, and complete ELF dynamic-linker behavior;
 - complete CPU instruction coverage, SIMD/FP, atomics, or architectural exception behavior;
 - SVC implementations, process/thread creation, scheduling, handles, TLS, or synchronization;
 - HIPC/CMIF, service-manager registration, filesystem, input, audio, display, or application lifecycle;
