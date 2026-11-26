@@ -2,42 +2,37 @@
 
 ## Status
 
-This is a small, independently written interpreter for selected A64 instruction encodings. It is useful for validating the CPU execution interface with synthetic programs. It is **not** a complete ARMv8-A implementation and is not evidence of Nintendo Switch 2 compatibility.
+LucidSwitch2 contains an independently written, deliberately incomplete A64 interpreter for synthetic test programs. It is a CPU research component, not a complete ARMv8-A implementation and not evidence of Nintendo Switch 2 compatibility.
 
 ## Implemented instructions
 
-- `NOP`
-- `MOVZ` (32-bit and 64-bit forms)
-- `MOVK` (32-bit and 64-bit forms)
-- `ADD/SUB (immediate)` and `ADDS/SUBS (immediate)`, including NZCV updates
-- `B` (unconditional PC-relative branch)
-- `B.cond` for the standard A64 condition codes
-- Unsigned-offset `LDR` and `STR` for 8-, 16-, 32-, and 64-bit values
-- `CBZ` and `CBNZ`
-- `BR` and `RET`
+- NOP
+- MOVZ and MOVK (32-bit and 64-bit forms)
+- ADD/SUB (immediate) and ADDS/SUBS (immediate), including NZCV updates
+- ADD/SUB (shifted register) and flag-setting variants
+- AND, ORR, EOR, and ANDS (shifted register), including common MOV register alias encoding
+- B, B.cond, CBZ, and CBNZ
+- BR and RET
+- Unsigned-offset LDR and STR for 8-, 16-, 32-, and 64-bit values
 
 ## Execution contract
 
-Each call to `A64Interpreter::step` attempts exactly one instruction:
+Each call to A64Interpreter::step attempts exactly one instruction:
 
-- `Executed`: instruction completed and PC advanced normally.
-- `Branch`: control flow changed PC.
-- `UnsupportedInstruction`: encoding is outside this subset; CPU state is left unchanged.
-- `MemoryFault`: instruction fetch failed.
-- `MisalignedProgramCounter`: PC was not 4-byte aligned.
+- Executed: instruction completed and PC advanced normally.
+- Branch: control flow changed PC.
+- UnsupportedInstruction: encoding is outside this subset; CPU state is left unchanged.
+- MemoryFault: instruction fetch or data access failed.
+- MisalignedProgramCounter: PC was not 4-byte aligned.
 
-The interpreter stores the four NZCV flags in `CpuContext::flags`. The flag-setting immediate arithmetic instructions update them; ordinary ADD/SUB preserve the prior flags. Register 31 is treated as the zero register for the currently supported data-processing operations.
+CpuContext includes 31 general-purpose registers, SP, PC, the retired-instruction counter, and NZCV flags. Register 31 is interpreted according to the instruction class: zero register for data-processing instructions, and SP for the supported load/store base and non-flag-setting ADD/SUB immediate source/destination cases.
 
-Instructions are fetched little-endian from the generic host-side `MemoryBus`. Tests use hand-authored instruction words and synthetic memory only; no console firmware or game files are involved.
+The memory bus distinguishes ordinary reads, writes, and instruction fetches using region permissions. Tests use hand-authored instruction words and synthetic memory only; no console firmware or game files are involved.
 
-## Not yet implemented
+## Not implemented
 
-Pre/post-indexed and register-offset memory addressing, signed loads, register arithmetic, logical operations, exceptions, privileged execution, SIMD/FP, atomics, and system registers remain unsupported.
+This is still a small subset. It does not implement exceptions, EL/security state, system registers, MMU/TLB behavior, caches, atomics, SIMD/FP, vector crypto, most A64 addressing modes, signed loads, exclusive accesses, or the complete instruction set. The interpreter is not sufficient to boot an operating system or commercial console software.
 
-## Next steps
+## Test strategy
 
-1. Add common register arithmetic and logical operations.
-2. Add pre/post-indexed and register-offset memory addressing.
-3. Expand tests for overflow, carry, signed conditions, and instruction edge cases.
-4. Add a reusable A64 instruction test corpus based on public architectural specifications.
-5. Expand coverage only when each new group has deterministic tests.
+Every implemented instruction family should have focused synthetic tests for results, flags, PC behavior, register-31 semantics, and memory faults. Unsupported encodings should fail explicitly rather than silently succeeding.

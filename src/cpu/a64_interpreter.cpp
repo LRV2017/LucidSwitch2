@@ -25,6 +25,51 @@ namespace {
     return index == 31U ? 0U : context.x[index];
 }
 
+void write_register(CpuContext& context, unsigned index,
+                    std::uint64_t value, bool is_64_bit) noexcept;
+
+[[nodiscard]] std::uint64_t read_addsub_register(
+    const CpuContext& context, unsigned index,
+    bool is_64_bit, bool set_flags) noexcept {
+    if (index == 31U && !set_flags) return context.sp & width_mask(is_64_bit);
+    return read_register(context, index) & width_mask(is_64_bit);
+}
+void write_addsub_register(CpuContext& context, unsigned index,
+    std::uint64_t value, bool is_64_bit, bool set_flags) noexcept {
+    if (index == 31U && !set_flags) {
+        context.sp = is_64_bit ? value : (value & 0xFFFFFFFFULL);
+        return;
+    }
+    write_register(context, index, value, is_64_bit);
+}
+[[nodiscard]] bool shifted_operand(std::uint64_t input, unsigned kind,
+    unsigned amount, bool is_64_bit, std::uint64_t& output) noexcept {
+    const unsigned width = is_64_bit ? 64U : 32U;
+    if (amount >= width || kind > 3U) return false;
+    const std::uint64_t mask = width_mask(is_64_bit);
+    const std::uint64_t value = input & mask;
+    switch (kind) {
+    case 0U: output = amount == 0U ? value : (value << amount) & mask; return true;
+    case 1U: output = value >> amount; return true;
+    case 2U:
+        output = static_cast<std::uint64_t>(sign_extend(value, width) >> amount) & mask;
+        return true;
+    case 3U:
+        output = amount == 0U ? value :
+            ((value >> amount) | (value << (width - amount))) & mask;
+        return true;
+    default: return false;
+    }
+}
+void set_logic_flags(CpuContext& context, std::uint64_t result,
+                     bool is_64_bit) noexcept {
+    const std::uint64_t value = result & width_mask(is_64_bit);
+    context.flags.negative = ((value >> (is_64_bit ? 63U : 31U)) & 1U) != 0U;
+    context.flags.zero = value == 0U;
+    context.flags.carry = false;
+    context.flags.overflow = false;
+}
+
 [[nodiscard]] std::uint64_t read_base_register(const CpuContext& context,
                                                const unsigned index) noexcept {
     return index == 31U ? context.sp : context.x[index];
@@ -100,7 +145,7 @@ void set_sub_flags(CpuContext& context, const std::uint64_t left,
                                      const std::uint64_t pc,
                                      std::uint32_t& instruction) {
     std::array<std::uint8_t, 4> bytes{};
-    if (!memory.read(pc, bytes)) {
+    if (!memory.read_instruction(pc, bytes)) {
         return false;
     }
 
@@ -216,6 +261,70 @@ StepResult A64Interpreter::step(CpuContext& context, core::MemoryBus& memory) {
         return StepResult::Executed;
     }
 
+    // ADD/SUB (shifted register), including flag-setting variants.
+    if ((instruction & 0x1F200000U) == 0x0B000000U) {
+        const bool is_64_bit = (instruction >> 31U) != 0U;
+        const bool subtract = (instruction & 0x40000000U) != 0U;
+        const bool set_flags = (instruction & 0x20000000U) != 0U;
+        const unsigned shift_kind = (instruction >> 22U) & 0x3U;
+        const unsigned amount = (instruction >> 10U) & 0x3FU;
+        if (shift_kind == 3U || (!is_64_bit && amount >= 32U))
+            return StepResult::UnsupportedInstruction;
+        const unsigned destination = instruction & 0x1FU;
+        const unsigned left_index = (instruction >> 5U) & 0x1FU;
+        const unsigned right_index = (instruction >> 16U) & 0x1FU;
+        const std::uint64_t mask = width_mask(is_64_bit);
+        const std::uint64_t left = read_register(context, left_index) & mask;
+        std::uint64_t right = 0U;
+        if (!shifted_operand(read_register(context, right_index), shift_kind,
+                             amount, is_64_bit, right))
+            return StepResult::UnsupportedInstruction;
+        const std::uint64_t result = subtract ? (left - right) & mask
+                                              : (left + right) & mask;
+        write_register(context, destination, result, is_64_bit);
+        if (set_flags) {
+            if (subtract) set_sub_flags(context, left, right, result, is_64_bit);
+            else set_add_flags(context, left, right, result, is_64_bit);
+        }
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
+    // AND/ORR/EOR/ANDS (shifted register), including MOV register alias.
+    if ((instruction & 0x1F000000U) == 0x0A000000U) {
+        const bool is_64_bit = (instruction >> 31U) != 0U;
+        const unsigned operation = (instruction >> 29U) & 0x3U;
+        const bool invert = (instruction & 0x00200000U) != 0U;
+        const unsigned shift_kind = (instruction >> 22U) & 0x3U;
+        const unsigned amount = (instruction >> 10U) & 0x3FU;
+        if (!is_64_bit && amount >= 32U)
+            return StepResult::UnsupportedInstruction;
+        const unsigned destination = instruction & 0x1FU;
+        const unsigned left_index = (instruction >> 5U) & 0x1FU;
+        const unsigned right_index = (instruction >> 16U) & 0x1FU;
+        const std::uint64_t mask = width_mask(is_64_bit);
+        const std::uint64_t left = read_register(context, left_index) & mask;
+        std::uint64_t right = 0U;
+        if (!shifted_operand(read_register(context, right_index), shift_kind,
+                             amount, is_64_bit, right))
+            return StepResult::UnsupportedInstruction;
+        if (invert) right = (~right) & mask;
+        std::uint64_t result = 0U;
+        switch (operation) {
+        case 0U: result = left & right; break;
+        case 1U: result = left | right; break;
+        case 2U: result = left ^ right; break;
+        case 3U: result = left & right; break;
+        }
+        result &= mask;
+        write_register(context, destination, result, is_64_bit);
+        if (operation == 3U) set_logic_flags(context, result, is_64_bit);
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
     // ADD/SUB (immediate), with optional NZCV updates (ADDS/SUBS).
     if ((instruction & 0x1F000000U) == 0x11000000U) {
         const bool is_64_bit = (instruction >> 31U) != 0U;
@@ -227,11 +336,12 @@ StepResult A64Interpreter::step(CpuContext& context, core::MemoryBus& memory) {
         const std::uint64_t immediate =
             static_cast<std::uint64_t>((instruction >> 10U) & 0xFFFU) << shift;
         const std::uint64_t mask = width_mask(is_64_bit);
-        const std::uint64_t left = read_register(context, source) & mask;
+        const std::uint64_t left =
+            read_addsub_register(context, source, is_64_bit, set_flags);
         const std::uint64_t right = immediate & mask;
         const std::uint64_t result = subtract ? (left - right) & mask
                                               : (left + right) & mask;
-        write_register(context, destination, result, is_64_bit);
+        write_addsub_register(context, destination, result, is_64_bit, set_flags);
         if (set_flags) {
             if (subtract) {
                 set_sub_flags(context, left, right, result, is_64_bit);

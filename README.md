@@ -1,27 +1,27 @@
 # LucidSwitch2
 
-An experimental, clean-room emulator research project focused on building a lawful foundation for studying modern console software and hardware interfaces.
+An experimental, clean-room emulator research project focused on building a lawful and testable foundation for studying modern console software and hardware interfaces.
 
-> **Status: early development.** LucidSwitch2 includes a small A64 interpreter for synthetic test programs, but it does not currently emulate Nintendo Switch 2 hardware, load commercial Switch 2 games, or provide playable compatibility. CPU, GPU, memory-map, system-service, and console-software compatibility remain incomplete.
+> Status: early development. LucidSwitch2 has a bounded CPU execution loop, a permission-aware synthetic memory bus, and a small A64 interpreter. It does not emulate Nintendo Switch 2 hardware, load commercial Switch 2 games, or provide playable compatibility.
 
 ## Project principles
 
-- **Clean-room implementation:** original code and independently authored documentation only.
-- **No bundled copyrighted material:** no console firmware, encryption keys, game images, SDK files, leaked materials, or proprietary assets.
-- **User-supplied files stay local:** future support must require users to provide lawfully obtained files themselves.
-- **Small, testable steps:** each subsystem should have isolated tests and documented evidence before compatibility is claimed.
-- **No compatibility claims without proof:** a feature is not considered supported just because an interface exists.
+- Clean-room implementation: original code and independently authored documentation only.
+- No bundled copyrighted material: no console firmware, encryption keys, game images, SDK files, leaked materials, or proprietary assets.
+- User-supplied files stay local: future support must require users to provide lawfully obtained files themselves.
+- Small, testable steps: each subsystem should have isolated tests and documented evidence before compatibility is claimed.
+- No compatibility claims without proof: an interface is not evidence of hardware support.
 
-## Current implementation
+## Current foundation
 
-- C++20 / CMake project foundation.
-- Checked host-side memory bus.
-- Emulator lifecycle model.
-- **A64 interpreter subset:** NOP, MOVZ, MOVK, ADD/SUB immediate, B, CBZ/CBNZ, BR, RET.
-- Synthetic instruction tests.
-- Cross-platform GitHub Actions CI.
+- C++20 / CMake project with cross-platform CI for Windows, Linux, and macOS.
+- Checked memory regions with read, write, and execute permissions.
+- CPU context with 31 general-purpose registers, SP, PC, retired-instruction count, and NZCV flags.
+- Bounded emulator execution loop with program loading, pause-on-budget, resume, stop, and explicit CPU fault reporting.
+- Small A64 interpreter subset: NOP, MOVZ, MOVK, immediate and shifted-register ADD/SUB, selected logical operations, NZCV updates, common branches, and unsigned-offset scalar LDR/STR.
+- Synthetic instruction and emulator integration tests.
 
-The interpreter is an educational milestone, **not a complete ARMv8-A CPU**. See [A64 subset limitations](docs/a64-subset.md).
+The interpreter is an educational foundation, not a complete ARMv8-A CPU. See docs/a64-subset.md and docs/known-limitations.md.
 
 ## Build
 
@@ -36,6 +36,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 .\build\Release\lucidswitch2.exe --self-test
+.\build\Release\lucidswitch2.exe --run
 ```
 
 ### Linux / macOS
@@ -45,17 +46,20 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ./build/lucidswitch2 --self-test
+./build/lucidswitch2 --run
 ```
+
+The --run command executes a tiny synthetic branch-loop demo for a bounded number of instructions. It does not load a game.
 
 ## Roadmap
 
-1. **Foundation:** build system, tests, memory primitives, lifecycle, subsystem contracts.
-2. **CPU research:** expand the A64 interpreter with flags, register arithmetic, memory operations, and public-specification-based tests.
-3. **Architecture research:** document publicly observable hardware requirements and define testable interfaces.
-4. **Memory and system services:** add documented abstractions with deterministic tests.
-5. **Graphics research:** design a backend around public graphics standards, then validate with original test scenes.
-6. **Homebrew test environment:** define a documented, original test format and sample programs that contain no proprietary code or assets.
-7. **Compatibility work:** only after the above, test legally obtained user-provided software and publish reproducible results.
+1. Host foundation: build system, memory primitives, CPU execution loop, lifecycle, diagnostics, and CI.
+2. CPU research: validate more A64 instruction groups using public specifications and differential test vectors.
+3. Architecture research: document publicly observable hardware requirements and define testable interfaces.
+4. System emulation: add documented exceptions, system registers, memory translation, timers, interrupts, and device abstractions.
+5. Graphics research: design a backend around public graphics standards, then validate with original test scenes.
+6. Homebrew test environment: define a documented, original test format and sample programs with no proprietary code or assets.
+7. Compatibility work: only after the above, test legally obtained user-provided software and publish reproducible results.
 
 ## Contributing
 
@@ -63,8 +67,8 @@ Please open an issue before a large change. Include the subsystem, public specif
 
 ## Legal and naming
 
-LucidSwitch2 is an independent research project and is not affiliated with, endorsed by, or sponsored by Nintendo. “Nintendo Switch” and related marks belong to their respective owner. This repository does not distribute Nintendo software, firmware, keys, or games. Users are responsible for complying with applicable laws and the terms governing any files they provide.
+LucidSwitch2 is an independent research project and is not affiliated with, endorsed by, or sponsored by Nintendo. Nintendo Switch and related marks belong to their respective owner. This repository does not distribute Nintendo software, firmware, keys, or games. Users are responsible for complying with applicable laws and the terms governing any files they provide.
 
 ## License
 
-The source code is licensed under the MIT License. See [LICENSE](LICENSE).
+The source code is licensed under the MIT License. See LICENSE.

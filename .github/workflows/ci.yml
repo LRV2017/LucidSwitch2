@@ -36,3 +36,12 @@ jobs:
             ./build/lucidswitch2 --self-test
           fi
         shell: bash
+
+      - name: Run bounded CPU demo
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            ./build/Release/lucidswitch2.exe --run
+          else
+            ./build/lucidswitch2 --run
+          fi
+        shell: bash

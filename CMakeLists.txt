@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(LucidSwitch2
-    VERSION 0.2.0
+    VERSION 0.3.0
     DESCRIPTION "Clean-room console emulation research scaffold"
     LANGUAGES CXX
 )

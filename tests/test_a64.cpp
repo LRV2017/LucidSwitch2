@@ -111,6 +111,37 @@ int main() {
            "execute RET");
     expect(state.program_counter == base + 0x70U, "RET loads PC from X30");
 
+    // Register arithmetic/logical operations.
+    write32(memory, base + 0x70U, 0x8B020020U); // ADD X0,X1,X2
+    write32(memory, base + 0x74U, 0xCB020023U); // SUB X3,X1,X2
+    write32(memory, base + 0x78U, 0x8A020024U); // AND X4,X1,X2
+    write32(memory, base + 0x7CU, 0xAA020025U); // ORR X5,X1,X2
+    write32(memory, base + 0x80U, 0xCA020026U); // EOR X6,X1,X2
+    write32(memory, base + 0x84U, 0xEA02003FU); // ANDS XZR,X1,X2
+    state.x[1] = 0xF0F0U;
+    state.x[2] = 0x0FF0U;
+    state.program_counter = base + 0x70U;
+    for (unsigned index = 0; index < 6U; ++index) {
+        expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+               "execute register arithmetic/logical instruction");
+    }
+    expect(state.x[0] == 0x100E0U, "ADD shifted-register computes sum");
+    expect(state.x[3] == 0xE100U, "SUB shifted-register computes difference");
+    expect(state.x[4] == 0x00F0U, "AND computes bitwise intersection");
+    expect(state.x[5] == 0xFFF0U, "ORR computes bitwise union");
+    expect(state.x[6] == 0xFF00U, "EOR computes bitwise exclusive-or");
+    expect(!state.flags.negative && !state.flags.zero &&
+           !state.flags.carry && !state.flags.overflow,
+           "ANDS updates logical NZCV flags");
+
+    // ADD X7,SP,#0 exercises ADD immediate SP source semantics.
+    write32(memory, base + 0x88U, 0x910003E7U);
+    state.sp = 0x123456789ABCDEF0ULL;
+    state.program_counter = base + 0x88U;
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute ADD immediate with SP source");
+    expect(state.x[7] == state.sp, "ADD immediate reads SP when Rn is 31");
+
     // Scalar unsigned-offset stores and loads: STR/LDR B, H, W and X.
     write32(memory, base + 0x90U, 0x39000480U); // STRB W0,[X4,#1]
     write32(memory, base + 0x94U, 0x39400481U); // LDRB W1,[X4,#1]
