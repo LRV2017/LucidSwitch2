@@ -58,8 +58,10 @@ void test_priority_scheduling_and_waits() {
            "block current thread and dispatch its equal-priority peer");
     expect(runtime.wake_waiters(0x55U) == 1U,
            "wake exactly the thread waiting on a matching wait key");
-    expect(runtime.block_current(0x66U, scheduled, &error) && scheduled == middle,
-           "block the remaining high-priority thread and dispatch the next priority");
+    expect(runtime.block_current(0x66U, scheduled, &error) && scheduled == high_b,
+           "return to the other ready high-priority thread");
+    expect(runtime.block_current(0x55U, scheduled, &error) && scheduled == middle,
+           "block the second high-priority thread and dispatch the next priority");
     expect(runtime.wake_waiters(0x55U) == 1U,
            "wake a blocked thread back into the ready set");
     expect(runtime.yield_current(scheduled, &error) && scheduled == high_b,
