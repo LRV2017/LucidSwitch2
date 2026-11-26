@@ -469,7 +469,7 @@ int main() {
     write32(memory, base + 0xD4U, 0xA9410440U);
     // STP X5,X6,[X2,#-16]!; LDP X7,X8,[X2],#16
     write32(memory, base + 0xD8U, 0xA9BF1845U);
-    write32(memory, base + 0xDCU, 0xA8812047U);
+    write32(memory, base + 0xDCU, 0xA8C12047U);
     state = lucid::cpu::CpuContext{};
     state.program_counter = base + 0xD0U;
     state.x[2] = base + 0xB0U;
