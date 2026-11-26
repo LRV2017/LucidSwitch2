@@ -7,11 +7,11 @@ Phase 8 adds a read-only inspector for two publicly documented original-Switch e
     .\build\Release\lucidswitch2.exe --inspect-switch-executable .\program.nro
     .\build\Release\lucidswitch2.exe --inspect-switch-executable .\module.nso
 
-The command reports file format, version and flags, declared image size, BSS size, module ID, text/rodata/data ranges, and applicable compression/hash metadata. For NRO it also prints the NRO-start module-header location, additional-header offset, and whether an ASET asset section was detected.
+The command reports file format, version and flags, declared image size, BSS size, module ID, text/rodata/data ranges, and applicable compression/hash metadata. For NRO it also prints the entry-stub instruction, MOD0 offset, additional-header offset, and whether an ASET asset section was detected.
 
 ## NRO0
 
-The classic NRO layout starts with a 0x10-byte NRO-start structure, followed by the NRO0 header. The NRO-start structure begins at offset 0x00 and is 0x10 bytes long. In the legacy layout, offset 0x00 is unused and offset 0x04 contains the MOD0 header pointer. Newer runtime layouts describe a version/padding word at 0x00, the header offset at 0x04, and a module-version offset at 0x08. The signature NRO0 begins at offset 0x10.
+The classic NRO layout starts with a 0x10-byte NRO-start structure, followed by the NRO0 header. The NRO-start structure is 0x10 bytes long. The Homebrew ABI treats the word at offset 0x00 as the entry branch (libnx names this field unused in its structure), offset 0x04 contains the MOD0 header pointer, and offsets 0x08-0x0F are padding. The signature NRO0 begins at offset 0x10.
 
 NRO0 fields include:
 - version at 0x14, total image size at 0x18, and flags at 0x1C;
@@ -19,7 +19,7 @@ NRO0 fields include:
 - BSS size at 0x38 and the newer additional-header offset at 0x3C;
 - 32-byte module ID at 0x40.
 
-For newer runtimes, the 0x10-byte NRO-start structure's module-header-location fields are versioned. The inspector reports the version/padding word, MOD0 header pointer, and optional version offset separately.
+The inspector reports the entry-stub instruction and MOD0 header pointer separately.
 
 The optional ASET section follows the declared NRO image and contains three offset/size pairs for icon, NACP, and RomFS data. Its section ranges are checked relative to the ASET header.
 

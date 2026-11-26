@@ -65,6 +65,12 @@ constexpr CompatibilityFeature kSwitch2ExecutableFeature{
     "No Switch 2 retail package parser, authenticated loader, or application runtime."
 };
 
+constexpr CompatibilityFeature kRestrictedNroFeature{
+    "Executable", "Restricted plaintext NRO homebrew execution",
+    ImplementationStatus::Partial,
+    "A bounded A64 subset can run a minimal NRO with a direct entry branch and no MOD0 metadata. No relocations, dynamic imports, Horizon ABI, system services, or game runtime."
+};
+
 void print_feature(const CompatibilityFeature& feature, std::ostream& output) {
     output << "  [" << to_string(feature.status) << "] "
            << feature.subsystem << " / " << feature.feature << "\n"
@@ -109,8 +115,12 @@ void write_compatibility_report(const HardwareTarget target, std::ostream& outpu
            << "Implementation inventory:\n";
 
     for (const auto& feature : kCommonFeatures) print_feature(feature, output);
-    print_feature(target == HardwareTarget::OriginalSwitch
-        ? kOriginalExecutableFeature : kSwitch2ExecutableFeature, output);
+    if (target == HardwareTarget::OriginalSwitch) {
+        print_feature(kOriginalExecutableFeature, output);
+        print_feature(kRestrictedNroFeature, output);
+    } else {
+        print_feature(kSwitch2ExecutableFeature, output);
+    }
 
     output << "\nCurrent conclusion: no commercial Switch or Switch 2 game is currently "
               "loadable or claimed compatible by this project.\n"

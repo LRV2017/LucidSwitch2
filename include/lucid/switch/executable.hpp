@@ -37,9 +37,8 @@ struct ExecutableInfo {
     std::uint64_t input_size{};
     std::uint32_t declared_image_size{};
     std::uint32_t bss_size{};
-    std::uint32_t module_header_version{};
+    std::uint32_t entry_stub_instruction{};
     std::uint32_t module_header_location{};
-    std::uint32_t module_version_offset{};
     std::uint32_t additional_header_offset{};
     std::array<std::uint8_t, 32U> build_id{};
     std::array<SegmentInfo, 3U> segments{};

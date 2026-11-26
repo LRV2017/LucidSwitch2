@@ -44,7 +44,7 @@ void write_magic(std::vector<std::uint8_t>& bytes, const std::size_t offset,
 
 std::vector<std::uint8_t> make_nro() {
     std::vector<std::uint8_t> bytes(0xB0U, 0U);
-    write_u32(bytes, 0x00U, 0U);
+    write_u32(bytes, 0x00U, 0x14000020U);
     write_u32(bytes, 0x04U, 0x80U);
     write_u32(bytes, 0x08U, 0U);
     write_magic(bytes, 0x10U, {'N', 'R', 'O', '0'});
@@ -103,11 +103,10 @@ void test_nro_metadata() {
            "read NRO text, rodata, and data ranges");
     expect(info.bss_size == 0x80U && info.build_id[31] == 31U,
            "read NRO BSS size and module build ID");
-    expect(info.module_header_version == 0U &&
+    expect(info.entry_stub_instruction == 0x14000020U &&
            info.module_header_location == 0x80U &&
-           info.module_version_offset == 0U &&
            info.additional_header_offset == 0U,
-           "read legacy NRO MOD0 pointer and versioned module-header fields");
+           "read NRO entry stub, MOD0 pointer, and additional-header offset");
     expect(!info.has_asset_section && info.trailing_bytes == 0U,
            "report the absence of an appended NRO ASET section");
 }
@@ -160,12 +159,6 @@ void test_nro_assets_and_rejection() {
     write_u32(damaged, 0x04U, 0xFFFFFFFFU);
     expect(!inspect_executable(damaged, info, &error),
            "reject an NRO MOD0 pointer outside the image");
-
-    damaged = make_nro();
-    write_u32(damaged, 0x00U, 17U);
-    write_u32(damaged, 0x08U, 0xFFFFFFFFU);
-    expect(!inspect_executable(damaged, info, &error),
-           "reject a versioned NRO module-version offset outside the image");
 
     damaged = make_nro();
     damaged.resize(0x30U);

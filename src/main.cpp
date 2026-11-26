@@ -5,6 +5,7 @@
 #include "lucid/homebrew/package.hpp"
 #include "lucid/switch/executable.hpp"
 #include "lucid/switch/compatibility.hpp"
+#include "lucid/switch/homebrew_loader.hpp"
 
 #include <algorithm>
 #include <array>
@@ -20,7 +21,7 @@
 #include <vector>
 
 namespace {
-constexpr const char* kVersion = "0.12.0";
+constexpr const char* kVersion = "0.13.0";
 constexpr std::uint64_t kDemoBase = 0x1000U;
 constexpr std::uint64_t kDemoInstructionBudget = 16U;
 constexpr std::uint64_t kDefaultHomebrewBudget = 100000U;
@@ -44,8 +45,10 @@ void print_help() {
         << "  lucidswitch2 --inspect-homebrew <program.lxp>\n"
         << "  lucidswitch2 --inspect-switch-executable <program.nro|program.nso>\n"
         << "  lucidswitch2 --compat-report <switch|switch2|all>\n"
+        << "  lucidswitch2 --run-nro <homebrew.nro> [instruction-budget]\n"
         << "  lucidswitch2 --run-homebrew <program.lxp> [instruction-budget]\n\n"
-        << "LXP is an original synthetic test format. No commercial console games are loaded.\n";
+        << "NRO execution is restricted to minimal plaintext homebrew; no Horizon OS, imports, relocations, or commercial games.\n"
+        << "Protected NSP/XCI/NCA content and production/title-key decryption are not supported.\n";
 }
 
 bool parse_instruction_budget(const char* text, std::uint64_t& budget) {
@@ -330,12 +333,10 @@ int inspect_switch_executable(const std::filesystem::path& path) {
               << "BSS bytes: " << info.bss_size << "\n";
     if (info.format == lucid::switchfmt::ExecutableFormat::Nro0) {
         std::cout << "Declared image bytes: " << info.declared_image_size << "\n";
-        std::cout << "NRO-start module-header version/padding: "
-                  << info.module_header_version << "\n"
+        std::cout << "Entry stub instruction: 0x" << std::hex
+                  << info.entry_stub_instruction << std::dec << "\n"
                   << "MOD0 header offset: 0x" << std::hex
                   << info.module_header_location << std::dec << "\n"
-                  << "Module-version offset: 0x" << std::hex
-                  << info.module_version_offset << std::dec << "\n"
                   << "Additional header offset: 0x" << std::hex
                   << info.additional_header_offset << std::dec << "\n"
                   << "ASET assets: " << (info.has_asset_section ? "present" : "not detected") << "\n";
@@ -364,6 +365,37 @@ int inspect_switch_executable(const std::filesystem::path& path) {
     std::cout << "Trailing bytes: " << info.trailing_bytes << "\n"
               << "Inspection only: no decryption, decompression, relocation, loading, or execution was performed.\n"
               << "NRO0/NSO0 metadata describes original Switch executable containers; it does not establish Switch 2 retail compatibility.\n";
+    return 0;
+}
+
+int run_nro_homebrew(const std::filesystem::path& path,
+                     const std::uint64_t instruction_budget) {
+    lucid::switchfmt::NroHomebrewRunReport report{};
+    std::string error;
+    if (!lucid::switchfmt::run_restricted_nro_homebrew(
+            path, instruction_budget, report, &error)) {
+        std::cerr << "Restricted NRO loader rejected the file: " << error << "\n";
+        return 1;
+    }
+
+    std::cout << "Restricted original-Switch NRO homebrew execution\n"
+              << "Image base: 0x" << std::hex << report.image_base << "\n"
+              << "Entry point: 0x" << report.entry_point << "\n"
+              << "Final PC: 0x" << report.program_counter << "\n"
+              << "Stack pointer: 0x" << report.stack_pointer << std::dec << "\n"
+              << "Instruction budget: " << report.instruction_budget << "\n"
+              << "Instructions retired: " << report.instructions_retired << "\n"
+              << "X0: 0x" << std::hex << report.register_x0 << std::dec << "\n"
+              << "Run result: " << lucid::core::to_string(report.run_result) << "\n"
+              << "Last CPU step: " << lucid::core::to_string(report.last_step) << "\n"
+              << "Runtime: bounded A64 interpreter; no Horizon OS or Switch GPU.\n"
+              << "Unsupported: MOD0 relocations, dynamic imports, system services, threads, audio, input, and display.\n";
+
+    if (report.run_result != lucid::core::RunResult::InstructionLimitReached) {
+        std::cerr << "The program reached an unsupported instruction or memory path; it did not complete a game session.\n";
+        return 1;
+    }
+    std::cout << "[PASS] restricted NRO image loaded and ran to its instruction budget.\n";
     return 0;
 }
 
@@ -517,6 +549,19 @@ int main(int argc, char* argv[]) {
             return 2;
         }
         return run_compatibility_report(argv[2]);
+    }
+    if (command == "--run-nro") {
+        if (argc < 3 || argc > 4) {
+            std::cerr << "Usage: --run-nro <homebrew.nro> [instruction-budget]\n";
+            return 2;
+        }
+        std::uint64_t budget = lucid::switchfmt::DefaultNroInstructionBudget;
+        if (argc == 4 && !parse_instruction_budget(argv[3], budget)) {
+            std::cerr << "Instruction budget must be between 1 and "
+                      << lucid::switchfmt::MaximumNroInstructionBudget << ".\n";
+            return 2;
+        }
+        return run_nro_homebrew(argv[2], budget);
     }
     if (command == "--run-homebrew") {
         if (argc < 3 || argc > 4) {

@@ -132,9 +132,8 @@ bool inspect_nro(const std::span<const std::uint8_t> bytes,
     candidate.version = read_u32(bytes, 0x14U);
     candidate.declared_image_size = read_u32(bytes, 0x18U);
     candidate.flags = read_u32(bytes, 0x1CU);
-    candidate.module_header_version = read_u32(bytes, 0x00U);
+    candidate.entry_stub_instruction = read_u32(bytes, 0x00U);
     candidate.module_header_location = read_u32(bytes, 0x04U);
-    candidate.module_version_offset = read_u32(bytes, 0x08U);
     candidate.bss_size = read_u32(bytes, 0x38U);
     candidate.additional_header_offset = read_u32(bytes, 0x3CU);
     candidate.input_size = bytes.size();
@@ -159,12 +158,6 @@ bool inspect_nro(const std::span<const std::uint8_t> bytes,
     if (candidate.module_header_location != 0U &&
         candidate.module_header_location > candidate.declared_image_size - 4U) {
         set_error(error, "The NRO-start MOD0 header offset is outside the declared image.");
-        return false;
-    }
-    if (candidate.module_header_version >= 17U &&
-        candidate.module_version_offset != 0U &&
-        candidate.module_version_offset > candidate.declared_image_size - 4U) {
-        set_error(error, "The NRO module-version offset is outside the declared image.");
         return false;
     }
     if (candidate.additional_header_offset != 0U &&

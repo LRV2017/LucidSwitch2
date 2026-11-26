@@ -24,9 +24,9 @@ Switch 2 hardware research reports 4 MB shared L3 cache, 256 KiB L2 per core, a 
 
 ### NRO0
 
-NRO is used for non-ExeFS executable binaries and starts with a 0x10-byte NRO-start structure followed by the NRO0 header at offset 0x10. The legacy start structure has an unused word at 0x00 and a MOD0 pointer at 0x04. Newer runtime structures use a version/padding word at 0x00, the MOD0 header offset at 0x04, and a module-version offset at 0x08. The NRO0 header contains the version, total file size, flags, text/rodata/data memory offsets and sizes, BSS size, an additional-header offset in newer versions, and a 32-byte module ID. NRO flags include an aligned-header bit and a compression bit introduced in later system software. Homebrew packages can append an optional ASET section containing icon, NACP, and RomFS ranges.
+NRO is used for non-ExeFS executable binaries and starts with a 0x10-byte NRO-start structure followed by the NRO0 header at offset 0x10. The start structure is 0x10 bytes: the Homebrew ABI uses the word at 0x00 as the entry branch, the MOD0 pointer is at 0x04, and 0x08-0x0F is padding. libnx names the first struct field unused, but the Homebrew ABI specifies that the loader enters at binary_ptr + 0 and the instruction branches past the NRO0 header. The NRO0 header contains the version, total file size, flags, text/rodata/data memory offsets and sizes, BSS size, an additional-header offset in newer versions, and a 32-byte module ID. NRO flags include an aligned-header bit and a compression bit introduced in later system software. Homebrew packages can append an optional ASET section containing icon, NACP, and RomFS ranges.
 
-The current parser accepts the classic plaintext, uncompressed file-offset layout. It validates the start/header signature, version, flags, segment sizes/ranges, BSS bounds, module-header location, additional-header offset, and optional ASET section bounds. It explicitly rejects the compressed NRO variant rather than assuming classic offsets remain valid.
+The current parser accepts the classic plaintext, uncompressed file-offset layout. It reports the entry branch and MOD0 pointer separately, and validates the start/header signature, version, flags, segment sizes/ranges, BSS bounds, MOD0 pointer, additional-header offset, and optional ASET section bounds. It explicitly rejects the compressed NRO variant rather than assuming classic offsets remain valid. Phase 9 adds a separate experimental runner for a very small profile: the NRO-start instruction must be a direct B-immediate branch into .text, and the MOD0 pointer must be zero.
 
 ### NSO0
 
@@ -69,9 +69,22 @@ Phase 8 adds:
 
 It does not decrypt, decompress, relocate, dynamically link, load, or execute Switch/Switch 2 retail content or Horizon applications.
 
+## Phase 9 restricted NRO execution prototype
+
+Phase 9 adds the `--run-nro` command for a deliberately minimal original-Switch homebrew profile:
+
+- accepts only plaintext, uncompressed NRO0 with a zero flags field;
+- requires the NRO-start instruction at `binary_ptr + 0` to be a direct A64 B-immediate into the validated .text segment;
+- rejects NRO files with a nonzero MOD0 pointer because dynamic metadata and relocations are not implemented;
+- maps a bounded guest image, zero-filled BSS, and a 64 KiB stack;
+- initializes the two documented NRO Homebrew ABI argument registers conservatively (X0 = null loader-config pointer, X1 = all ones);
+- runs only the interpreter instruction subset and stops at a user-specified instruction budget (maximum 10,000,000).
+
+This is an execution proof for synthetic/minimal NRO test images, not a complete Homebrew ABI environment. A real NRO that expects libnx runtime initialization, dynamic relocations, imported modules, SVCs, handles, threads, filesystem/input/audio/display services, or GPU access will stop or fault. The runner is not a general-purpose game launcher.
+
 ## Next implementation milestones
 
-1. Add a loader for uncompressed, self-contained homebrew images using validated segment metadata and explicit guest page permissions.
+1. Expand the restricted NRO runner into a real homebrew loader: segment-specific guest page permissions, MOD0 parsing, dynamic relocations, and runtime initialization.
 2. Expand AArch64 execution: SIMD/NEON, FP state, atomics/exclusives, architectural exceptions, and target-specific extensions such as pointer authentication where required.
 3. Implement memory-management behavior, complete SVC transitions, process/thread state, scheduling, TLS, handles, and synchronization primitives.
 4. Implement HIPC/CMIF message handling, session/domain behavior, a service manager, and a small documented homebrew service set.
@@ -81,3 +94,7 @@ It does not decrypt, decompress, relocate, dynamically link, load, or execute Sw
 8. Only then assess broader user-provided software compatibility. A full retail-title path remains contingent on many additional technical, legal, and security boundaries.
 
 These are engineering milestones, not a guarantee that commercial games will become compatible.
+
+## Research references
+
+See [research-sources.md](research-sources.md) for the supplied ROMSLAB workflow context and the primary NRO/Homebrew ABI references used by the project.

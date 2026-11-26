@@ -10,10 +10,10 @@ This document is intentionally blunt so the project's maturity is not overstated
 - Timer output, interrupt-controller signals, and MMIO device accesses are not yet connected to CPU execution.
 - The guest GPU command processor accepts only the original documented Lucid test packet format; it is not a console GPU command processor.
 - No guest operating system, kernel, or system-service implementation exists.
-- No console-specific executable/package loader exists.
+- Only a restricted minimal NRO0 homebrew execution prototype exists; it is not a general console executable/package loader.
 - No firmware, keys, game images, SDK files, leaked materials, or commercial assets are included or supported by this scaffold.
 - The memory bus is a generic host-side physical backing store, not a map of any real console.
-- The emulator execution loop runs synthetic programs loaded through its API; it is not a commercial game loader.
+- The emulator can run original LXP test programs and a narrow synthetic/minimal NRO profile. It is not a commercial game loader.
 - A successful build, self-test, or CPU demo is not proof that console software can boot or run.
 - No Nintendo Switch 2 hardware compatibility or commercial game compatibility is claimed.
 
@@ -42,7 +42,7 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 
 ## Phase 8 compatibility research
 
-- The NRO0/NSO0 inspector reads plaintext metadata only. It is not a loader and does not decompress, hash-verify, relocate, dynamically link, map, or execute a title.
+- The NRO0/NSO0 inspector reads plaintext metadata only. The separate Phase 9 NRO runner accepts a narrow no-MOD0 NRO profile and does not decompress, hash-verify, relocate, dynamically link, or provide operating-system services.
 - NRO inspection currently supports the classic uncompressed file-offset layout; compressed/extended NRO variants are rejected.
 - NSO compression, hash-check, execute-only, and Zstd flags are reported, but the segment contents are not decompressed or hash-verified.
 - No NCA content archive parser or encrypted content processing is implemented.
@@ -51,3 +51,16 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 - There is no Horizon OS process runtime, full SVC ABI, scheduler, HIPC/CMIF service stack, filesystem service, audio/input/display service set, or target GPU command processor.
 - The Vulkan renderer is a host renderer for original LucidSwitch2 test geometry. It does not emulate Maxwell or Ampere guest GPU commands or shaders.
 - No commercial Switch or Switch 2 game is currently loadable or claimed compatible.
+
+
+## Phase 9 restricted NRO runner
+
+- Only plaintext, uncompressed NRO0 with a zero flags field is accepted. NSO0 is metadata-only.
+- The NRO-start branch must be an A64 B-immediate instruction that targets the validated .text segment.
+- Files with a nonzero MOD0 pointer are rejected until MOD0 parsing, dynamic relocation, and linking exist.
+- The runner uses a fixed 64 KiB stack, bounded guest memory, and a maximum 10,000,000-instruction budget.
+- The emulated CPU supports only the documented A64 subset. Real homebrew commonly depends on many instructions and services not implemented here.
+- The current implementation uses one coarse RWX guest RAM mapping; it does not yet enforce per-segment text/rodata/data page permissions.
+- No loader configuration entries, system-call implementation, process/thread manager, HIPC/CMIF, filesystem, input, audio, display, or guest GPU are provided.
+- An instruction-budget stop proves only that this small program ran for the requested number of instructions; it is not evidence of game compatibility.
+- Protected NSP/XCI/NCA content and production/title-key decryption are not supported.
