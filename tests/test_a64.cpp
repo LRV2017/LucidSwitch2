@@ -4,6 +4,7 @@
 #include "lucid/mmu/address_space.hpp"
 
 #include <array>
+#include <bit>
 #include <cstdint>
 #include <iostream>
 
@@ -308,6 +309,71 @@ int main() {
     expect(cpu.step(translated_state, translated_memory) ==
                lucid::cpu::StepResult::MemoryFault,
            "instruction fetch obeys page execute permissions");
+
+
+    // Scalar floating-point register transfers and arithmetic (S/D lanes).
+    write32(memory, base + 0x00U, 0x1E270020U); // FMOV S0,W1
+    write32(memory, base + 0x04U, 0x1E260002U); // FMOV W2,S0
+    write32(memory, base + 0x08U, 0x1E252883U); // FADD S3,S4,S5
+    write32(memory, base + 0x0CU, 0x1E6838E6U); // FSUB D6,D7,D8
+    write32(memory, base + 0x10U, 0x1E6B0949U); // FMUL D9,D10,D11
+    write32(memory, base + 0x14U, 0x1E2E19ACU); // FDIV S12,S13,S14
+    write32(memory, base + 0x18U, 0x9E67020FU); // FMOV D15,X16
+    write32(memory, base + 0x1CU, 0x9E6601F1U); // FMOV X17,D15
+    write32(memory, base + 0x20U, 0x1E204072U); // FMOV S18,S3
+    write32(memory, base + 0x24U, 0x1E6040D3U); // FMOV D19,D6
+
+    state = lucid::cpu::CpuContext{};
+    state.program_counter = base;
+    state.x[1] = 0x40400000U; // 3.0f
+    state.v[4].low = std::bit_cast<std::uint32_t>(1.5F);
+    state.v[5].low = std::bit_cast<std::uint32_t>(2.25F);
+    state.v[7].low = std::bit_cast<std::uint64_t>(5.5);
+    state.v[8].low = std::bit_cast<std::uint64_t>(2.0);
+    state.v[10].low = std::bit_cast<std::uint64_t>(1.5);
+    state.v[11].low = std::bit_cast<std::uint64_t>(4.0);
+    state.v[13].low = std::bit_cast<std::uint32_t>(9.0F);
+    state.v[14].low = std::bit_cast<std::uint32_t>(3.0F);
+    state.x[16] = std::bit_cast<std::uint64_t>(6.25);
+    state.flags = {true, false, true, true};
+    for (unsigned index = 0U; index < 10U; ++index) {
+        expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+               "execute scalar FP move or arithmetic instruction");
+    }
+    expect(state.x[2] == 0x40400000U,
+           "FMOV Wd,Sn transfers the scalar S lane bit-for-bit");
+    expect(state.v[3].low == std::bit_cast<std::uint32_t>(3.75F),
+           "FADD S computes single-precision arithmetic");
+    expect(state.v[6].low == std::bit_cast<std::uint64_t>(3.5),
+           "FSUB D computes double-precision arithmetic");
+    expect(state.v[9].low == std::bit_cast<std::uint64_t>(6.0),
+           "FMUL D computes double-precision arithmetic");
+    expect(state.v[12].low == std::bit_cast<std::uint32_t>(3.0F),
+           "FDIV S computes single-precision arithmetic");
+    expect(state.x[17] == std::bit_cast<std::uint64_t>(6.25),
+           "FMOV Xd,Dn transfers the scalar D lane bit-for-bit");
+    expect(state.v[0].low == 0x40400000U &&
+           state.v[0].high == 0U && state.v[18].low == state.v[3].low &&
+           state.v[18].high == 0U &&
+           state.v[19].low == state.v[6].low &&
+           state.v[19].high == 0U,
+           "scalar FMOV writes the selected lane and clears modeled upper lanes");
+    expect(state.flags.negative && !state.flags.zero &&
+           state.flags.carry && state.flags.overflow,
+           "scalar FP instructions leave integer NZCV flags unchanged");
+
+    // An unsupported FP type/encoding must fail without mutating CPU state.
+    write32(memory, base + 0x28U, 0x1EA20803U);
+    state.program_counter = base + 0x28U;
+    const auto fp_unsupported_retired = state.instructions_retired;
+    const auto fp_unsupported_x3 = state.x[3];
+    expect(cpu.step(state, memory) ==
+               lucid::cpu::StepResult::UnsupportedInstruction,
+           "reject unsupported scalar FP type encoding");
+    expect(state.program_counter == base + 0x28U &&
+           state.instructions_retired == fp_unsupported_retired &&
+           state.x[3] == fp_unsupported_x3,
+           "unsupported scalar FP encoding leaves CPU state unchanged");
 
     if (failures != 0) {
         std::cerr << failures << " A64 test(s) failed.\n";

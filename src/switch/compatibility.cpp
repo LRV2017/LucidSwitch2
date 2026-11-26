@@ -30,11 +30,13 @@ constexpr HardwareProfile kSwitch2{
     "Nintendo confirms custom NVIDIA processor; T239-level detail is community reverse-engineered"
 };
 
-constexpr std::array<CompatibilityFeature, 10U> kCommonFeatures{{
+constexpr std::array<CompatibilityFeature, 11U> kCommonFeatures{{
     {"CPU", "AArch64 scalar interpreter", ImplementationStatus::Partial,
      "Only a small documented instruction subset is implemented; no general game compatibility."},
-    {"CPU", "SIMD/NEON and floating-point execution", ImplementationStatus::NotImplemented,
-     "Vector and FP architectural state and instruction coverage are missing."},
+    {"CPU", "Scalar S/D floating-point and FMOV", ImplementationStatus::Partial,
+     "Scalar single/double arithmetic and bit-preserving FMOV are modeled; FPCR/FPSR, traps, and full precision control are not."},
+    {"CPU", "Advanced SIMD/NEON vector execution", ImplementationStatus::NotImplemented,
+     "Vector arithmetic, lane operations, vector loads/stores, and NEON crypto instructions are not implemented."},
     {"CPU", "Atomics, exclusives, and pointer authentication", ImplementationStatus::NotImplemented,
      "Required synchronization and target-specific PAC semantics are not implemented."},
     {"Memory", "Stage-1 address translation", ImplementationStatus::Partial,

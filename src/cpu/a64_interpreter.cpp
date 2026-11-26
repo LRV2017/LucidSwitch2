@@ -2,6 +2,7 @@
 #include "lucid/arch/system_registers.hpp"
 
 #include <array>
+#include <bit>
 #include <cstdint>
 #include <limits>
 
@@ -297,6 +298,100 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
         const std::uint64_t previous = read_register(context, destination);
         write_register(context, destination,
                        (previous & ~field_mask) | immediate, is_64_bit);
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
+    // Scalar floating-point moves and arithmetic. This foundation models
+    // only the S and D scalar lanes; vector/NEON operations and FPCR/FPSR
+    // architectural control are intentionally not implied.
+    const std::uint32_t fp_opcode = instruction & 0xFFE0FC00U;
+    const unsigned fp_destination = instruction & 0x1FU;
+    const unsigned fp_source_n = (instruction >> 5U) & 0x1FU;
+    const unsigned fp_source_m = (instruction >> 16U) & 0x1FU;
+
+    if (fp_opcode == 0x1E270000U || fp_opcode == 0x9E670000U) {
+        // FMOV Sd,Wn / FMOV Dd,Xn (bit-preserving general-to-FP transfer).
+        const bool is_double = fp_opcode == 0x9E670000U;
+        context.v[fp_destination].low = is_double
+            ? read_register(context, fp_source_n)
+            : (read_register(context, fp_source_n) & 0xFFFFFFFFULL);
+        context.v[fp_destination].high = 0U;
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
+    if (fp_opcode == 0x1E260000U || fp_opcode == 0x9E660000U) {
+        // FMOV Wd,Sn / FMOV Xd,Dn (bit-preserving FP-to-general transfer).
+        const bool is_double = fp_opcode == 0x9E660000U;
+        write_register(context, fp_destination,
+                       context.v[fp_source_n].low, is_double);
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
+    if (fp_opcode == 0x1E204000U || fp_opcode == 0x1E604000U) {
+        // FMOV Sd,Sn / FMOV Dd,Dn (scalar lane copy).
+        const bool is_double = fp_opcode == 0x1E604000U;
+        context.v[fp_destination].low = is_double
+            ? context.v[fp_source_n].low
+            : (context.v[fp_source_n].low & 0xFFFFFFFFULL);
+        context.v[fp_destination].high = 0U;
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
+    enum class ScalarFpOperation { None, Multiply, Divide, Add, Subtract };
+    ScalarFpOperation fp_operation = ScalarFpOperation::None;
+    switch (fp_opcode) {
+    case 0x1E200800U: case 0x1E600800U:
+        fp_operation = ScalarFpOperation::Multiply; break;
+    case 0x1E201800U: case 0x1E601800U:
+        fp_operation = ScalarFpOperation::Divide; break;
+    case 0x1E202800U: case 0x1E602800U:
+        fp_operation = ScalarFpOperation::Add; break;
+    case 0x1E203800U: case 0x1E603800U:
+        fp_operation = ScalarFpOperation::Subtract; break;
+    default: break;
+    }
+
+    if (fp_operation != ScalarFpOperation::None) {
+        const bool is_double = (fp_opcode & 0x00400000U) != 0U;
+        if (is_double) {
+            const double left = std::bit_cast<double>(
+                context.v[fp_source_n].low);
+            const double right = std::bit_cast<double>(
+                context.v[fp_source_m].low);
+            double result = 0.0;
+            switch (fp_operation) {
+            case ScalarFpOperation::Multiply: result = left * right; break;
+            case ScalarFpOperation::Divide: result = left / right; break;
+            case ScalarFpOperation::Add: result = left + right; break;
+            case ScalarFpOperation::Subtract: result = left - right; break;
+            case ScalarFpOperation::None: break;
+            }
+            context.v[fp_destination].low = std::bit_cast<std::uint64_t>(result);
+        } else {
+            const float left = std::bit_cast<float>(
+                static_cast<std::uint32_t>(context.v[fp_source_n].low));
+            const float right = std::bit_cast<float>(
+                static_cast<std::uint32_t>(context.v[fp_source_m].low));
+            float result = 0.0F;
+            switch (fp_operation) {
+            case ScalarFpOperation::Multiply: result = left * right; break;
+            case ScalarFpOperation::Divide: result = left / right; break;
+            case ScalarFpOperation::Add: result = left + right; break;
+            case ScalarFpOperation::Subtract: result = left - right; break;
+            case ScalarFpOperation::None: break;
+            }
+            context.v[fp_destination].low =
+                static_cast<std::uint64_t>(std::bit_cast<std::uint32_t>(result));
+        }
+        context.v[fp_destination].high = 0U;
         context.program_counter = next_pc;
         ++context.instructions_retired;
         return StepResult::Executed;

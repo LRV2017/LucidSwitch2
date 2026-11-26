@@ -15,6 +15,8 @@ LucidSwitch2 contains an independently written, deliberately incomplete A64 inte
 - BR and RET
 - Unsigned-offset LDR and STR for 8-, 16-, 32-, and 64-bit values
 - MRS and MSR for the selected system-register bank (CurrentEL, DAIF, SPSel, and selected EL1 registers)
+- Scalar S/D floating-point arithmetic: FADD, FSUB, FMUL, and FDIV
+- Scalar FMOV bit transfers between W/X general registers and S/D FP registers, plus S-to-S and D-to-D scalar register copies
 
 ## Execution contract
 
@@ -27,13 +29,13 @@ Each call to A64Interpreter::step attempts exactly one instruction:
 - SystemRegisterFault: an attempted write to a read-only modeled system register was rejected.
 - MisalignedProgramCounter: PC was not 4-byte aligned.
 
-CpuContext includes 31 general-purpose registers, SP, PC, the retired-instruction counter, and NZCV flags. Register 31 is interpreted according to the instruction class: zero register for data-processing instructions, and SP for the supported load/store base and non-flag-setting ADD/SUB immediate source/destination cases.
+CpuContext includes 31 general-purpose registers, 32 modeled 128-bit SIMD/FP registers, SP, PC, the retired-instruction counter, and NZCV flags. The SIMD/FP register file is architectural storage; only the listed scalar S/D instructions currently operate on it. Register 31 is interpreted according to the instruction class: zero register for data-processing instructions, and SP for the supported load/store base and non-flag-setting ADD/SUB immediate source/destination cases.
 
 The CPU-visible memory facade can translate every byte either through the standalone 4 KiB AddressSpace map or through Stage1Mmu. Emulator sessions use the stage-1 walker. Its deliberately limited regime is 4 KiB granules, lower 48-bit VAs, 48-bit PAs, TTBR0_EL1, and EL1 permission checks. Tests use synthetic page tables and hand-authored instruction words only; no console firmware or game files are involved. See mmu-stage1.md for its precise supported descriptor format.
 
 ## Not implemented
 
-This is still a small subset. It does not implement exception entry/return, full EL/security state, system-instruction traps, ASIDs, TTBR1, additional granule sizes, full TLB maintenance, caches, atomics, SIMD/FP, vector crypto, most A64 addressing modes, signed loads, exclusive accesses, or the complete instruction set. The stage-1 walker is not a complete ARMv8-A MMU and the interpreter is not sufficient to boot an operating system or commercial console software. Only the listed modeled system registers are decoded; all other encodings remain unsupported.
+This is still a small subset. Scalar FP arithmetic uses host IEEE single/double operations and does not model FPCR/FPSR, architectural rounding control, FP exception flags/traps, denormal modes, or full NaN behavior. No vector/NEON arithmetic, lane operations, vector loads/stores, or vector crypto are implemented. The interpreter also lacks exception entry/return completeness, full EL/security state, system-instruction traps, ASIDs, TTBR1, additional granule sizes, full TLB maintenance, caches, atomics, most A64 addressing modes, signed loads, exclusive accesses, and the complete instruction set. The stage-1 walker is not a complete ARMv8-A MMU and the interpreter is not sufficient to boot an operating system or commercial console software. Only the listed modeled system registers are decoded; all other encodings remain unsupported.
 
 ## Test strategy
 

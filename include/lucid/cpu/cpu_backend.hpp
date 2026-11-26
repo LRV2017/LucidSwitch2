@@ -17,7 +17,13 @@ struct CpuFlags {
     bool overflow{};
 };
 
+struct SimdRegister {
+    std::uint64_t low{};
+    std::uint64_t high{};
+};
+
 struct CpuContext {
+    std::array<SimdRegister, 32> v{};
     std::array<std::uint64_t, 31> x{};
     std::uint64_t sp{};
     std::uint64_t program_counter{};
