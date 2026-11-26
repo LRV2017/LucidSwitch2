@@ -69,6 +69,10 @@ void test_emulator_execution() {
            "refuse execution before initialization");
     expect(emulator.initialize(config, &error), "initialize CPU-backed session");
     expect(emulator.state() == SessionState::Ready, "session becomes ready");
+    expect(emulator.stage1_mmu().configured(), "emulator configures ARM stage-1 translation");
+    expect(emulator.cpu_context().system_registers.read(
+        lucid::arch::SystemRegister::TTBR0_EL1) == emulator.stage1_mmu().ttbr0_el1(),
+        "emulator exposes its TTBR0 bootstrap value");
     expect(!emulator.initialize(config, &error), "reject duplicate initialization");
     const std::array<std::uint8_t, 4U> loop{0x00U, 0x00U, 0x00U, 0x14U};
     expect(emulator.load_program(base, loop, &error), "load synthetic A64 program");
@@ -80,6 +84,9 @@ void test_emulator_execution() {
     expect(emulator.cpu_context().instructions_retired == 7U &&
            emulator.cpu_context().program_counter == base,
            "branch loop runs and preserves expected PC");
+    expect(emulator.stage1_mmu().tlb_entries() > 0U &&
+           emulator.stage1_mmu().tlb_hits() > 0U,
+           "emulator instruction fetches fill and hit the TLB");
     expect(emulator.run(3U) == RunResult::InstructionLimitReached,
            "resume paused session");
     expect(emulator.cpu_context().instructions_retired == 10U,

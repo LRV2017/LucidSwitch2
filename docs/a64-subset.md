@@ -29,11 +29,11 @@ Each call to A64Interpreter::step attempts exactly one instruction:
 
 CpuContext includes 31 general-purpose registers, SP, PC, the retired-instruction counter, and NZCV flags. Register 31 is interpreted according to the instruction class: zero register for data-processing instructions, and SP for the supported load/store base and non-flag-setting ADD/SUB immediate source/destination cases.
 
-The CPU-visible memory facade can optionally translate every byte through the explicit 4 KiB AddressSpace map before accessing the physical MemoryBus. Instruction fetch, data read, and data write use separate translation permissions, and a store preflights all target bytes before committing. Emulator sessions currently establish an identity-mapped guest range so the normal run loop exercises this path. This is a software page map, not an ARM descriptor walker or TLB. Tests use hand-authored instruction words and synthetic memory only; no console firmware or game files are involved.
+The CPU-visible memory facade can translate every byte either through the standalone 4 KiB AddressSpace map or through Stage1Mmu. Emulator sessions use the stage-1 walker. Its deliberately limited regime is 4 KiB granules, lower 48-bit VAs, 48-bit PAs, TTBR0_EL1, and EL1 permission checks. Tests use synthetic page tables and hand-authored instruction words only; no console firmware or game files are involved. See mmu-stage1.md for its precise supported descriptor format.
 
 ## Not implemented
 
-This is still a small subset. It does not implement exception entry/return, full EL/security state, system-instruction traps, an ARM stage-1 descriptor walker, TLB/ASID behavior, caches, atomics, SIMD/FP, vector crypto, most A64 addressing modes, signed loads, exclusive accesses, or the complete instruction set. Only the listed modeled system registers are decoded; all other encodings remain unsupported. The interpreter is not sufficient to boot an operating system or commercial console software.
+This is still a small subset. It does not implement exception entry/return, full EL/security state, system-instruction traps, ASIDs, TTBR1, additional granule sizes, full TLB maintenance, caches, atomics, SIMD/FP, vector crypto, most A64 addressing modes, signed loads, exclusive accesses, or the complete instruction set. The stage-1 walker is not a complete ARMv8-A MMU and the interpreter is not sufficient to boot an operating system or commercial console software. Only the listed modeled system registers are decoded; all other encodings remain unsupported.
 
 ## Test strategy
 

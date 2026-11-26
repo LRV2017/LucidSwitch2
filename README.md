@@ -2,7 +2,7 @@
 
 An experimental, clean-room emulator research project focused on building a lawful and testable foundation for studying modern console software and hardware interfaces.
 
-> Status: early development. LucidSwitch2 has a bounded CPU execution loop, a permission-aware synthetic memory bus, and a small A64 interpreter. It does not emulate Nintendo Switch 2 hardware, load commercial Switch 2 games, or provide playable compatibility.
+> Status: early development. LucidSwitch2 has a bounded A64 execution loop, a permission-aware memory bus, a limited stage-1 MMU descriptor walker with a TLB, and a small instruction interpreter. It does not emulate Nintendo Switch 2 hardware, load commercial Switch 2 games, or provide playable compatibility.
 
 ## Project principles
 
@@ -19,10 +19,11 @@ An experimental, clean-room emulator research project focused on building a lawf
 - CPU context with 31 general-purpose registers, SP, PC, retired-instruction count, and NZCV flags.
 - Bounded emulator execution loop with program loading, pause-on-budget, resume, stop, and explicit CPU fault reporting.
 - Small A64 interpreter subset: NOP, MOVZ, MOVK, immediate and shifted-register ADD/SUB, selected logical operations, NZCV updates, common branches, unsigned-offset scalar LDR/STR, and selected MRS/MSR system-register accesses.
-- Translation-aware CPU memory facade: instruction fetches and data accesses pass through 4 KiB virtual-page mappings with read/write/execute checks; emulator sessions use an identity-mapped guest range.
+- Translation-aware CPU memory facade: instruction fetches and data accesses pass through the stage-1 walker and TLB; emulator sessions build a synthetic identity map using L1 1 GiB block descriptors.
+- Limited ARM stage-1 support: 4 KiB granule, 48-bit lower VA / 48-bit PA, TTBR0_EL1, L0-L3 walks, L1/L2 blocks, L3 pages, access-flag and EL1 permission checks, and explicit TLB invalidation.
 - Synthetic instruction and emulator integration tests.
 
-The interpreter is an educational foundation, not a complete ARMv8-A CPU. The current address map is a software mapping table, not an ARM hardware page-table walker or TLB. See docs/a64-subset.md and docs/known-limitations.md.
+The interpreter and MMU are educational foundations, not a complete ARMv8-A implementation. The walker supports only one documented 4 KiB / 48-bit TTBR0 regime and does not implement the full architectural permission, fault, cacheability, ASID, or TLB maintenance model. See docs/a64-subset.md, docs/mmu-stage1.md, and docs/known-limitations.md.
 
 ## Build
 
@@ -52,7 +53,7 @@ ctest --test-dir build --output-on-failure
 
 The --run command executes a tiny synthetic branch-loop demo for a bounded number of instructions. It does not load a game.
 
-## Frontend prototype\n\nOpen `frontend/index.html` in a modern browser to preview the console-inspired home screen, game library, settings, local metadata-only import flow, and basic controller detection. This is not yet a native desktop application and cannot launch imported files.\n\n## Phase 2 architecture components\n\nThe repository includes initial standalone models for selected system registers and EL1 exception vector routing, explicit 4 KiB address translation, a deterministic virtual timer, a 64-source interrupt controller, and an MMIO device bus. These are building blocks, not a complete ARMv8 implementation or fully integrated console hardware model. See `docs/phase-2-architecture.md`.\n\n## Roadmap
+## Frontend prototype\n\nOpen `frontend/index.html` in a modern browser to preview the console-inspired home screen, game library, settings, local metadata-only import flow, and basic controller detection. This is not yet a native desktop application and cannot launch imported files.\n\n## Phase 2 architecture components\n\nThe repository includes selected system registers and EL1 exception-vector modeling, a 4 KiB stage-1 descriptor walker and TLB, a deterministic virtual timer, a 64-source interrupt controller, and an MMIO device bus. The walker is integrated into CPU fetch/load/store and the emulator bootstrap, but many ARMv8-A features and console hardware models remain unimplemented. See `docs/phase-2-architecture.md` and `docs/mmu-stage1.md`.\n\n## Roadmap
 
 1. Host foundation: build system, memory primitives, CPU execution loop, lifecycle, diagnostics, and CI.
 2. CPU research: validate more A64 instruction groups using public specifications and differential test vectors.

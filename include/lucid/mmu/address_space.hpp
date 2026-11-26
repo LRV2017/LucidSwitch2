@@ -4,7 +4,7 @@
 #include <map>
 namespace lucid::mmu {
 enum class AccessType { Read,Write,Execute };
-enum class TranslationFault { None,Unmapped,PermissionDenied,AddressOverflow };
+enum class TranslationFault { None,Unmapped,PermissionDenied,AddressOverflow,InvalidDescriptor,AccessFlagFault,TableWalkFault,UnsupportedConfiguration };
 struct Translation { TranslationFault fault{TranslationFault::Unmapped}; std::uint64_t physical_address{}; explicit operator bool() const noexcept{return fault==TranslationFault::None;} };
 class AddressSpace final {
 public:

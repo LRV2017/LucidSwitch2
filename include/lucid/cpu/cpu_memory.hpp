@@ -2,6 +2,7 @@
 
 #include "lucid/core/memory_bus.hpp"
 #include "lucid/mmu/address_space.hpp"
+#include "lucid/mmu/stage1_mmu.hpp"
 
 #include <array>
 #include <cstdint>
@@ -15,6 +16,7 @@ class CpuMemory final {
 public:
     explicit CpuMemory(core::MemoryBus& physical_memory,
                        const mmu::AddressSpace* address_space = nullptr) noexcept;
+    CpuMemory(core::MemoryBus& physical_memory, mmu::Stage1Mmu& stage1_mmu) noexcept;
 
     [[nodiscard]] bool read(std::uint64_t address,
                             std::span<std::uint8_t> output) const;
@@ -31,6 +33,7 @@ private:
 
     core::MemoryBus& physical_memory_;
     const mmu::AddressSpace* address_space_;
+    mmu::Stage1Mmu* stage1_mmu_{};
 };
 
 } // namespace lucid::cpu

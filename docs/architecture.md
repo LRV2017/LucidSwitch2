@@ -10,7 +10,8 @@ LucidSwitch2 is an early clean-room emulator research project. Its host-side cor
 - Core session (lucid::core::Emulator): initializes guest memory, loads caller-supplied bytes, runs the CPU for a bounded instruction budget, supports resume/stop, and reports CPU faults.
 - Memory bus (lucid::core::MemoryBus): checked host-side regions with read, write, and execute permissions.
 - CPU interpreter (lucid::cpu::A64Interpreter): selected A64 instructions for synthetic programs, including translation-aware fetch/load/store and selected MRS/MSR encodings; see a64-subset.md.
-- CPU memory facade (lucid::cpu::CpuMemory): optional virtual-to-physical translation and access-permission enforcement using the software AddressSpace map.
+- CPU memory facade (lucid::cpu::CpuMemory): virtual-to-physical translation and access-permission enforcement using either the standalone AddressSpace map or the stage-1 MMU.
+- Stage-1 MMU (lucid::mmu::Stage1Mmu): bounded 4 KiB / 48-bit TTBR0 descriptor walker with L1/L2 block support and a fixed-size software TLB.
 - Graphics contract (lucid::gpu::GraphicsBackend): future host rendering boundary only; no guest GPU command processor or renderer exists.
 
 ## Design constraints
@@ -26,9 +27,9 @@ LucidSwitch2 is an early clean-room emulator research project. Its host-side cor
 ## Current execution flow
 
 1. Caller initializes EmulatorConfig with a guest memory range and entry point.
-2. Emulator maps that range, creates identity mappings for its guest pages, and initializes the A64 CPU context.
+2. Emulator maps that range, allocates translation-table memory, creates L0/L1 identity descriptors for the 1 GiB blocks covering guest RAM, and initializes TTBR0_EL1/TCR_EL1 plus the A64 context.
 3. Caller loads a synthetic byte sequence into mapped memory.
-4. run(instruction_budget) executes at most the requested number of instructions; CPU fetches and data accesses pass through the translation-aware memory facade.
+4. run(instruction_budget) executes at most the requested number of instructions; CPU fetches and data accesses pass through the stage-1 descriptor walker and TLB.
 5. Emulator pauses at the budget or enters Faulted on an unsupported instruction, system-register write fault, or access/translation fault.
 
 The instruction budget is a host safety mechanism, not a guest timing model.
@@ -40,4 +41,4 @@ Build a proper decoder/test corpus and add broader, specification-backed A64 cov
 
 ## Phase 2 components
 
-See [phase-2-architecture.md](phase-2-architecture.md) for the system-register, exception, address-space, timer, interrupt, MMIO, and frontend prototype status. Translation-aware CPU memory access and selected MRS/MSR instructions are now integrated; exception routing, timers, interrupts, and MMIO remain separate building blocks.
+See [phase-2-architecture.md](phase-2-architecture.md) and [mmu-stage1.md](mmu-stage1.md) for system-register, exception, translation, timer, interrupt, MMIO, and frontend status. The bounded stage-1 walker and TLB now sit in the CPU memory path; exception routing, timers, interrupts, and MMIO remain separate building blocks.

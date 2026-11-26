@@ -4,7 +4,7 @@
 #include <iostream>
 #include <string>
 namespace {
-constexpr const char* kVersion = "0.5.0";
+constexpr const char* kVersion = "0.6.0";
 constexpr std::uint64_t kDemoBase = 0x1000U;
 constexpr std::uint64_t kDemoInstructionBudget = 16U;
 void print_help() {
