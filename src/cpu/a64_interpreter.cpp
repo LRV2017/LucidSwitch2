@@ -722,6 +722,100 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
     }
 
 
+
+    // Register-offset integer loads/stores with UXTW, LSL, SXTW or SXTX.
+    if ((instruction & 0x3B200C00U) == 0x38200800U) {
+        if ((instruction & 0x04000000U) != 0U)
+            return StepResult::UnsupportedInstruction;
+        const unsigned size = (instruction >> 30U) & 0x3U;
+        const unsigned opc = (instruction >> 22U) & 0x3U;
+        const unsigned target = instruction & 0x1FU;
+        const unsigned base_register = (instruction >> 5U) & 0x1FU;
+        const unsigned index_register = (instruction >> 16U) & 0x1FU;
+        const unsigned option = (instruction >> 13U) & 0x7U;
+        const bool scaled = (instruction & 0x1000U) != 0U;
+        if ((option != 2U && option != 3U &&
+             option != 6U && option != 7U) ||
+            (opc == 2U && size == 3U) ||
+            (opc == 3U && size > 1U)) {
+            return StepResult::UnsupportedInstruction;
+        }
+
+        bool negative_index = false;
+        std::uint64_t index_magnitude = 0U;
+        if (option == 2U) {
+            index_magnitude = read_register(context, index_register) & 0xFFFFFFFFULL;
+        } else if (option == 3U) {
+            index_magnitude = read_register(context, index_register);
+        } else {
+            std::int64_t signed_index = 0;
+            if (option == 6U) {
+                signed_index = static_cast<std::int64_t>(
+                    std::bit_cast<std::int32_t>(
+                        static_cast<std::uint32_t>(
+                            read_register(context, index_register))));
+            } else {
+                signed_index = std::bit_cast<std::int64_t>(
+                    read_register(context, index_register));
+            }
+            negative_index = signed_index < 0;
+            index_magnitude = negative_index
+                ? static_cast<std::uint64_t>(-(signed_index + 1)) + 1U
+                : static_cast<std::uint64_t>(signed_index);
+        }
+
+        const unsigned shift = scaled ? size : 0U;
+        if (index_magnitude >
+            (std::numeric_limits<std::uint64_t>::max() >> shift)) {
+            return StepResult::MemoryFault;
+        }
+        const std::uint64_t offset = index_magnitude << shift;
+        const std::uint64_t base = read_base_register(context, base_register);
+        std::uint64_t address = base;
+        if (negative_index) {
+            if (offset > base) return StepResult::MemoryFault;
+            address = base - offset;
+        } else {
+            if (base > std::numeric_limits<std::uint64_t>::max() - offset)
+                return StepResult::MemoryFault;
+            address = base + offset;
+        }
+
+        const bool store = opc == 0U;
+        const bool zero_extend_load = opc == 1U;
+        const bool sign_extend_to_x = opc == 2U;
+        const bool sign_extend_to_w = opc == 3U;
+        const std::size_t transfer_size = std::size_t{1} << size;
+        std::array<std::uint8_t, 8U> bytes{};
+        if (store) {
+            const std::uint64_t value =
+                read_register(context, target) & width_mask(size == 3U);
+            for (std::size_t byte = 0U; byte < transfer_size; ++byte)
+                bytes[byte] =
+                    static_cast<std::uint8_t>((value >> (byte * 8U)) & 0xFFU);
+            if (!memory.write(address, std::span<const std::uint8_t>(
+                    bytes.data(), transfer_size)))
+                return StepResult::MemoryFault;
+        } else {
+            if (!memory.read(address, std::span<std::uint8_t>(
+                    bytes.data(), transfer_size)))
+                return StepResult::MemoryFault;
+            std::uint64_t value = 0U;
+            for (std::size_t byte = 0U; byte < transfer_size; ++byte)
+                value |= static_cast<std::uint64_t>(bytes[byte]) << (byte * 8U);
+            if (sign_extend_to_x || sign_extend_to_w) {
+                value = static_cast<std::uint64_t>(
+                    sign_extend(value, static_cast<unsigned>(transfer_size * 8U)));
+                write_register(context, target, value, sign_extend_to_x);
+            } else {
+                write_register(context, target, value, zero_extend_load && size == 3U);
+            }
+        }
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
     // Unscaled, pre-index and post-index scalar integer loads/stores.
     // Unprivileged, register-offset and SIMD/FP forms remain unsupported.
     if ((instruction & 0x3B200000U) == 0x38000000U) {

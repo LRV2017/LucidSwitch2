@@ -18,7 +18,7 @@ An experimental, clean-room emulator research project focused on building a lawf
 - Checked memory regions with read, write, and execute permissions.
 - CPU context with 31 general-purpose registers, 32 modeled 128-bit SIMD/FP registers, SP, PC, retired-instruction count, and NZCV flags.
 - Bounded emulator execution loop with program loading, pause-on-budget, resume, stop, and explicit CPU fault reporting.
-- Expanded but incomplete A64 interpreter: MOVN/MOVZ/MOVK, ADR/ADRP, logical immediates, conditional selects, UDIV/SDIV, variable shifts, MADD/MSUB, linked branches, scalar S/D FMOV and FADD/FSUB/FMUL/FDIV, NZCV updates, common branches, unsigned-offset and unscaled/pre/post-index scalar LDR/STR, signed loads, integer pair LDP/STP, and selected MRS/MSR system-register accesses.
+- Expanded but incomplete A64 interpreter: MOVN/MOVZ/MOVK, ADR/ADRP, logical immediates, conditional selects, UDIV/SDIV, variable shifts, MADD/MSUB, linked branches, scalar S/D FMOV and FADD/FSUB/FMUL/FDIV, NZCV updates, common branches, unsigned-offset, unscaled/pre/post-index and register-offset scalar LDR/STR, signed loads, integer pair LDP/STP, and selected MRS/MSR system-register accesses.
 - Translation-aware CPU memory facade: instruction fetches and data accesses pass through the stage-1 walker and TLB; emulator sessions build a synthetic identity map using L1 1 GiB block descriptors.
 - Limited ARM stage-1 support: 4 KiB granule, 48-bit lower VA / 48-bit PA, TTBR0_EL1, L0-L3 walks, L1/L2 blocks, L3 pages, access-flag and EL1 permission checks, and explicit TLB invalidation.
 - Limited exception model: EL0/EL1 state, SVC entry, EL1 vector routing, SPSR_EL1/ELR_EL1 save-and-restore, ERET, and deterministic timer-driven IRQ delivery.

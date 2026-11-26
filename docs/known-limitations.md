@@ -122,3 +122,9 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 
 - Scalar unscaled, pre-index and post-index integer forms are supported for selected byte/halfword/word/doubleword transfers, including sign-extending loads.
 - Register-offset addressing, SIMD/FP vector memory operations, unprivileged access, exclusive/atomic operations, and other addressing forms remain unsupported.
+
+
+## AArch64 register-offset memory operations
+
+- Integer register-offset LDR/STR supports UXTW, LSL, SXTW and SXTX index extensions and optional element-size scaling.
+- SIMD/FP vector memory operations and exclusive/atomic accesses remain unsupported; no multi-core memory ordering model is present.

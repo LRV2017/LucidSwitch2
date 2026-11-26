@@ -555,6 +555,44 @@ int main() {
            state.instructions_retired == indexed_fault_retired,
            "faulting pre-index store leaves base and CPU state unchanged");
 
+
+    // Register-offset addressing: LDR X with LSL #3, LDR W with UXTW #2,
+    // and a negative SXTW index.
+    write32(memory, base + 0x80U, 0xF8627820U); // LDR X0,[X1,X2,LSL #3]
+    write32(memory, base + 0x84U, 0xB8625823U); // LDR W3,[X1,W2,UXTW #2]
+    write32(memory, base + 0x88U, 0xF862D824U); // LDR X4,[X1,W2,SXTW #3]
+    const std::array<std::uint8_t, 8U> reg_offset_data{
+        0x88U, 0x77U, 0x66U, 0x55U, 0x44U, 0x33U, 0x22U, 0x11U
+    };
+    const std::array<std::uint8_t, 4U> reg_offset_word{
+        0x98U, 0xBAU, 0xDCU, 0xFEU
+    };
+    expect(memory.write(base + 0xB0U, reg_offset_data),
+           "seed a register-offset 64-bit load");
+    expect(memory.write(base + 0xA8U, reg_offset_word),
+           "seed a register-offset 32-bit load");
+    expect(memory.write(base + 0xC0U, reg_offset_data),
+           "seed a negative register-offset load");
+    state = lucid::cpu::CpuContext{};
+    state.program_counter = base + 0x80U;
+    state.x[1] = base + 0xA0U;
+    state.x[2] = 2U;
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute an LDR using LSL-scaled register offset");
+    expect(state.x[0] == 0x1122334455667788ULL,
+           "LSL register-offset load selects the scaled 64-bit element");
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute an LDR using UXTW-scaled register offset");
+    expect(state.x[3] == 0xFEDCBA98U,
+           "UXTW register-offset load selects the scaled 32-bit element");
+    state.x[1] = base + 0xD0U;
+    state.x[2] = static_cast<std::uint64_t>(-2LL);
+    state.program_counter = base + 0x88U;
+    expect(cpu.step(state, memory) == lucid::cpu::StepResult::Executed,
+           "execute an LDR using a negative SXTW register offset");
+    expect(state.x[4] == 0x1122334455667788ULL,
+           "SXTW register-offset load applies a signed negative index");
+
     if (failures != 0) {
         std::cerr << failures << " A64 test(s) failed.\n";
         return 1;
