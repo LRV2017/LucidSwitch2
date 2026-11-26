@@ -196,9 +196,43 @@ RunResult Emulator::run(std::uint64_t instruction_budget) noexcept {
         cpu::CpuMemory execution_memory(memory_, stage1_mmu_);
         last_step_result_ = cpu_.step(cpu_context_, execution_memory);
         if (last_step_result_ != cpu::StepResult::Executed &&
-            last_step_result_ != cpu::StepResult::Branch) {
+            last_step_result_ != cpu::StepResult::Branch &&
+            last_step_result_ != cpu::StepResult::ExceptionTaken) {
             state_ = SessionState::Faulted;
             return RunResult::CpuFault;
+        }
+
+        // Deterministic one-tick-per-instruction timer; the timer is wired to
+        // interrupt source 30 and is acknowledged only after IRQ delivery.
+        virtual_timer_.advance(1U);
+        if (virtual_timer_.interrupt_pending()) {
+            (void)interrupt_controller_.raise(
+                devices::InterruptController::TimerInterruptId);
+        }
+
+        constexpr std::uint64_t irq_mask = 1ULL << 7U;
+        const bool irq_unmasked =
+            (cpu_context_.system_registers.read(arch::SystemRegister::DAIF) &
+             irq_mask) == 0U;
+        if (irq_unmasked) {
+            unsigned interrupt_id = 0U;
+            if (interrupt_controller_.acknowledge(interrupt_id)) {
+                const arch::ExceptionRecord exception{
+                    arch::ExceptionKind::IRQ,
+                    cpu_context_.system_registers.current_el(),
+                    cpu_context_.program_counter,
+                    0U,
+                    0U,
+                    cpu_context_.pstate()
+                };
+                cpu_context_.program_counter =
+                    exception_router_.enter(cpu_context_.system_registers,
+                                            exception);
+                if (interrupt_id ==
+                    devices::InterruptController::TimerInterruptId) {
+                    virtual_timer_.acknowledge();
+                }
+            }
         }
     }
     state_ = SessionState::Paused;
@@ -218,6 +252,10 @@ MemoryBus& Emulator::memory_bus() noexcept { return memory_; }
 const mmu::Stage1Mmu& Emulator::stage1_mmu() const noexcept { return stage1_mmu_; }
 mmu::Stage1Mmu& Emulator::stage1_mmu() noexcept { return stage1_mmu_; }
 cpu::StepResult Emulator::last_step_result() const noexcept { return last_step_result_; }
+devices::VirtualTimer& Emulator::virtual_timer() noexcept { return virtual_timer_; }
+const devices::VirtualTimer& Emulator::virtual_timer() const noexcept { return virtual_timer_; }
+devices::InterruptController& Emulator::interrupt_controller() noexcept { return interrupt_controller_; }
+const devices::InterruptController& Emulator::interrupt_controller() const noexcept { return interrupt_controller_; }
 
 const char* to_string(SessionState state) noexcept {
     switch (state) {
@@ -248,6 +286,7 @@ const char* to_string(cpu::StepResult result) noexcept {
     case cpu::StepResult::MemoryFault: return "memory fault";
     case cpu::StepResult::MisalignedProgramCounter: return "misaligned program counter";
     case cpu::StepResult::SystemRegisterFault: return "system register access fault";
+    case cpu::StepResult::ExceptionTaken: return "exception taken";
     }
     return "unknown";
 }

@@ -24,6 +24,28 @@ struct CpuContext {
     std::uint64_t instructions_retired{};
     CpuFlags flags{};
     arch::SystemRegisters system_registers{};
+
+    [[nodiscard]] std::uint64_t pstate() const noexcept {
+        const auto el = system_registers.current_el();
+        const auto mode = (static_cast<std::uint64_t>(el) << 2U) |
+            (el == 1U ? (system_registers.read(
+                arch::SystemRegister::SPSel) & 1U) : 0U);
+        const std::uint64_t nzcv =
+            (flags.negative ? (1ULL << 31U) : 0U) |
+            (flags.zero ? (1ULL << 30U) : 0U) |
+            (flags.carry ? (1ULL << 29U) : 0U) |
+            (flags.overflow ? (1ULL << 28U) : 0U);
+        return nzcv |
+            (system_registers.read(arch::SystemRegister::DAIF) & 0x3C0U) |
+            mode;
+    }
+
+    void restore_nzcv(const std::uint64_t saved_pstate) noexcept {
+        flags.negative = (saved_pstate & (1ULL << 31U)) != 0U;
+        flags.zero = (saved_pstate & (1ULL << 30U)) != 0U;
+        flags.carry = (saved_pstate & (1ULL << 29U)) != 0U;
+        flags.overflow = (saved_pstate & (1ULL << 28U)) != 0U;
+    }
 };
 
 enum class StepResult {
@@ -33,7 +55,8 @@ enum class StepResult {
     UnsupportedInstruction,
     MemoryFault,
     MisalignedProgramCounter,
-    SystemRegisterFault
+    SystemRegisterFault,
+    ExceptionTaken
 };
 
 // A deliberately incomplete A64 interpreter. It implements only the

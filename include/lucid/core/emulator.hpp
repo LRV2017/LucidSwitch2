@@ -1,6 +1,8 @@
 #pragma once
 #include "lucid/core/memory_bus.hpp"
 #include "lucid/cpu/cpu_backend.hpp"
+#include "lucid/devices/interrupt_controller.hpp"
+#include "lucid/devices/virtual_timer.hpp"
 #include "lucid/mmu/stage1_mmu.hpp"
 #include <cstddef>
 #include <cstdint>
@@ -33,6 +35,10 @@ public:
     [[nodiscard]] const mmu::Stage1Mmu& stage1_mmu() const noexcept;
     [[nodiscard]] mmu::Stage1Mmu& stage1_mmu() noexcept;
     [[nodiscard]] cpu::StepResult last_step_result() const noexcept;
+    [[nodiscard]] devices::VirtualTimer& virtual_timer() noexcept;
+    [[nodiscard]] const devices::VirtualTimer& virtual_timer() const noexcept;
+    [[nodiscard]] devices::InterruptController& interrupt_controller() noexcept;
+    [[nodiscard]] const devices::InterruptController& interrupt_controller() const noexcept;
 private:
     SessionState state_{SessionState::Cold};
     EmulatorConfig config_{};
@@ -41,6 +47,9 @@ private:
     cpu::A64Interpreter cpu_{};
     cpu::CpuContext cpu_context_{};
     cpu::StepResult last_step_result_{cpu::StepResult::Executed};
+    devices::VirtualTimer virtual_timer_{};
+    devices::InterruptController interrupt_controller_{};
+    arch::ExceptionRouter exception_router_{};
 };
 [[nodiscard]] const char* to_string(SessionState state) noexcept;
 [[nodiscard]] const char* to_string(RunResult result) noexcept;

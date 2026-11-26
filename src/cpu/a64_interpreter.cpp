@@ -176,6 +176,45 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
 
     const std::uint64_t next_pc = context.program_counter + 4U;
 
+    // SVC #imm16: take a synchronous exception to the EL1 vector table.
+    if ((instruction & 0xFFE0001FU) == 0xD4000001U) {
+        const auto source_el = context.system_registers.current_el();
+        const auto immediate = static_cast<std::uint64_t>(
+            (instruction >> 5U) & 0xFFFFU);
+        constexpr std::uint64_t svc_exception_class = 0x15ULL << 26U;
+        const arch::ExceptionRecord exception{
+            arch::ExceptionKind::Synchronous,
+            source_el,
+            next_pc,
+            svc_exception_class | immediate,
+            0U,
+            context.pstate()
+        };
+        const arch::ExceptionRouter router;
+        context.program_counter =
+            router.enter(context.system_registers, exception);
+        ++context.instructions_retired;
+        return StepResult::ExceptionTaken;
+    }
+
+    // ERET: restore the saved EL, DAIF, SPSel, and NZCV state.
+    if (instruction == 0xD69F03E0U) {
+        if (context.system_registers.current_el() != 1U) {
+            return StepResult::SystemRegisterFault;
+        }
+        const auto saved_pstate = context.system_registers.read(
+            arch::SystemRegister::SPSR_EL1);
+        const arch::ExceptionRouter router;
+        auto return_pc = context.program_counter;
+        if (!router.return_from_exception(context.system_registers, return_pc)) {
+            return StepResult::SystemRegisterFault;
+        }
+        context.restore_nzcv(saved_pstate);
+        context.program_counter = return_pc;
+        ++context.instructions_retired;
+        return StepResult::Branch;
+    }
+
     if (instruction == 0xD503201FU) { // NOP
         context.program_counter = next_pc;
         ++context.instructions_retired;
@@ -189,6 +228,10 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
         arch::SystemRegister system_register{};
         if (!arch::decode_system_register(encoding, system_register)) {
             return StepResult::UnsupportedInstruction;
+        }
+        if (context.system_registers.current_el() == 0U &&
+            system_register != arch::SystemRegister::CurrentEL) {
+            return StepResult::SystemRegisterFault;
         }
         const unsigned destination = instruction & 0x1FU;
         write_register(context, destination,
@@ -205,6 +248,10 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
         arch::SystemRegister system_register{};
         if (!arch::decode_system_register(encoding, system_register)) {
             return StepResult::UnsupportedInstruction;
+        }
+        if (context.system_registers.current_el() == 0U &&
+            system_register != arch::SystemRegister::CurrentEL) {
+            return StepResult::SystemRegisterFault;
         }
         const unsigned source = instruction & 0x1FU;
         const auto access = context.system_registers.write(

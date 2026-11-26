@@ -22,6 +22,9 @@ An experimental, clean-room emulator research project focused on building a lawf
 - Translation-aware CPU memory facade: instruction fetches and data accesses pass through the stage-1 walker and TLB; emulator sessions build a synthetic identity map using L1 1 GiB block descriptors.
 - Limited ARM stage-1 support: 4 KiB granule, 48-bit lower VA / 48-bit PA, TTBR0_EL1, L0-L3 walks, L1/L2 blocks, L3 pages, access-flag and EL1 permission checks, and explicit TLB invalidation.
 - Synthetic instruction and emulator integration tests.
+- Limited exception model: EL0/EL1 state, SVC entry, EL1 vector routing, SPSR_EL1/ELR_EL1 save-and-restore, ERET, and deterministic timer-driven IRQ delivery.
+
+The exception path is also deliberately limited: it models SVC and IRQ entry to EL1 plus ERET back to EL0/EL1, but it is not a complete PSTATE, exception-syndrome, or interrupt-controller implementation.
 
 The interpreter and MMU are educational foundations, not a complete ARMv8-A implementation. The walker supports only one documented 4 KiB / 48-bit TTBR0 regime and does not implement the full architectural permission, fault, cacheability, ASID, or TLB maintenance model. See docs/a64-subset.md, docs/mmu-stage1.md, and docs/known-limitations.md.
 
