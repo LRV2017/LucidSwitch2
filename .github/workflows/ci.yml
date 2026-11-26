@@ -45,3 +45,15 @@ jobs:
             ./build/lucidswitch2 --run
           fi
         shell: bash
+
+      - name: Create, inspect, and execute original LXP sample
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            LUCID_BIN="./build/Release/lucidswitch2.exe"
+          else
+            LUCID_BIN="./build/lucidswitch2"
+          fi
+          "$LUCID_BIN" --create-homebrew-sample build/register_demo.lxp
+          "$LUCID_BIN" --inspect-homebrew build/register_demo.lxp
+          "$LUCID_BIN" --run-homebrew build/register_demo.lxp 3
+        shell: bash

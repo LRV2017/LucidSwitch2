@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(LucidSwitch2
-    VERSION 0.9.0
+project(LucidSwitch2 VERSION 0.10.0
     DESCRIPTION "Clean-room console emulation research scaffold"
     LANGUAGES CXX
 )
@@ -33,13 +32,11 @@ add_library(lucid_core
     src/gpu/software_backend.cpp
     src/gpu/vulkan_backend.cpp
     src/gpu/window_presenter.cpp
+    src/homebrew/package.cpp
 )
 
-target_include_directories(lucid_core
-    PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-)
-
+target_include_directories(lucid_core PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_compile_features(lucid_core PUBLIC cxx_std_20)
 
 if(LUCID_ENABLE_VULKAN AND Vulkan_FOUND)
@@ -78,40 +75,37 @@ target_link_libraries(lucidswitch2 PRIVATE lucid_core)
 
 if(LUCID_BUILD_TESTS)
     enable_testing()
+    set(LUCID_TEST_TARGETS
+        lucid_tests
+        lucid_a64_tests
+        lucid_architecture_tests
+        lucid_exception_tests
+        lucid_gpu_tests
+        lucid_homebrew_tests
+    )
 
     add_executable(lucid_tests tests/test_main.cpp)
-    target_link_libraries(lucid_tests PRIVATE lucid_core)
-    target_compile_features(lucid_tests PRIVATE cxx_std_20)
-
     add_executable(lucid_a64_tests tests/test_a64.cpp)
     add_executable(lucid_architecture_tests tests/test_architecture.cpp)
     add_executable(lucid_exception_tests tests/test_exceptions.cpp)
     add_executable(lucid_gpu_tests tests/test_gpu.cpp)
-    target_link_libraries(lucid_a64_tests PRIVATE lucid_core)
-    target_link_libraries(lucid_architecture_tests PRIVATE lucid_core)
-    target_link_libraries(lucid_exception_tests PRIVATE lucid_core)
-    target_link_libraries(lucid_gpu_tests PRIVATE lucid_core)
-    target_compile_features(lucid_a64_tests PRIVATE cxx_std_20)
-    target_compile_features(lucid_exception_tests PRIVATE cxx_std_20)
-    target_compile_features(lucid_gpu_tests PRIVATE cxx_std_20)
+    add_executable(lucid_homebrew_tests tests/test_homebrew.cpp)
 
-    if(MSVC)
-        target_compile_options(lucid_tests PRIVATE /W4 /permissive-)
-        target_compile_options(lucid_a64_tests PRIVATE /W4 /permissive-)
-        target_compile_options(lucid_architecture_tests PRIVATE /W4 /permissive-)
-        target_compile_options(lucid_exception_tests PRIVATE /W4 /permissive-)
-        target_compile_options(lucid_gpu_tests PRIVATE /W4 /permissive-)
-    else()
-        target_compile_options(lucid_tests PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
-        target_compile_options(lucid_a64_tests PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
-        target_compile_options(lucid_architecture_tests PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
-        target_compile_options(lucid_exception_tests PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
-        target_compile_options(lucid_gpu_tests PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
-    endif()
+    foreach(test_target IN LISTS LUCID_TEST_TARGETS)
+        target_link_libraries(${test_target} PRIVATE lucid_core)
+        target_compile_features(${test_target} PRIVATE cxx_std_20)
+        if(MSVC)
+            target_compile_options(${test_target} PRIVATE /W4 /permissive-)
+        else()
+            target_compile_options(${test_target} PRIVATE
+                -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+        endif()
+    endforeach()
 
     add_test(NAME lucid_tests COMMAND lucid_tests)
     add_test(NAME lucid_a64_tests COMMAND lucid_a64_tests)
     add_test(NAME lucid_architecture_tests COMMAND lucid_architecture_tests)
     add_test(NAME lucid_exception_tests COMMAND lucid_exception_tests)
     add_test(NAME lucid_gpu_tests COMMAND lucid_gpu_tests)
+    add_test(NAME lucid_homebrew_tests COMMAND lucid_homebrew_tests)
 endif()
