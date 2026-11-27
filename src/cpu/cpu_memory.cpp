@@ -18,7 +18,7 @@ bool CpuMemory::translate_and_validate(
     const std::uint64_t address, const std::size_t size,
     const mmu::AccessType access,
     const core::MemoryPermission physical_permission,
-    std::array<std::uint64_t, 8>& physical_addresses) const {
+    std::array<std::uint64_t, 16>& physical_addresses) const {
     physical_addresses.fill(0U);
     if (size == 0U) return true;
     if (size > physical_addresses.size()) return false;
@@ -64,7 +64,7 @@ bool CpuMemory::read_instruction(const std::uint64_t address,
     if (address_space_ == nullptr && stage1_mmu_ == nullptr) {
         return physical_memory_.read_instruction(address, output);
     }
-    std::array<std::uint64_t, 8> physical_addresses{};
+    std::array<std::uint64_t, 16> physical_addresses{};
     if (!translate_and_validate(address, output.size(), mmu::AccessType::Execute,
                                 core::MemoryPermission::Execute,
                                 physical_addresses)) {
@@ -83,7 +83,7 @@ bool CpuMemory::write(const std::uint64_t address,
                       const std::span<const std::uint8_t> input) {
     if (address_space_ == nullptr && stage1_mmu_ == nullptr)
         return physical_memory_.write(address, input);
-    std::array<std::uint64_t, 8> physical_addresses{};
+    std::array<std::uint64_t, 16> physical_addresses{};
     if (!translate_and_validate(address, input.size(), mmu::AccessType::Write,
                                 core::MemoryPermission::Write,
                                 physical_addresses)) {
@@ -105,8 +105,8 @@ bool CpuMemory::atomic_rmw(const std::uint64_t address,
     const core::AtomicOperation operation,std::uint64_t& previous_value){
     if(address_space_==nullptr&&stage1_mmu_==nullptr)
         return physical_memory_.atomic_rmw(address,size,operand,operation,previous_value);
-    std::array<std::uint64_t,8> read_addresses{};
-    std::array<std::uint64_t,8> write_addresses{};
+    std::array<std::uint64_t, 16> read_addresses{};
+    std::array<std::uint64_t, 16> write_addresses{};
     if(!translate_and_validate(address,size,mmu::AccessType::Read,
             core::MemoryPermission::Read,read_addresses)||
        !translate_and_validate(address,size,mmu::AccessType::Write,
@@ -125,8 +125,8 @@ bool CpuMemory::atomic_compare_exchange(const std::uint64_t address,
     if(address_space_==nullptr&&stage1_mmu_==nullptr)
         return physical_memory_.atomic_compare_exchange(address,size,expected,desired,
                                                          previous_value,exchanged);
-    std::array<std::uint64_t,8> read_addresses{};
-    std::array<std::uint64_t,8> write_addresses{};
+    std::array<std::uint64_t, 16> read_addresses{};
+    std::array<std::uint64_t, 16> write_addresses{};
     if(!translate_and_validate(address,size,mmu::AccessType::Read,
             core::MemoryPermission::Read,read_addresses)||
        !translate_and_validate(address,size,mmu::AccessType::Write,
@@ -172,7 +172,7 @@ bool CpuMemory::read_exclusive(const std::uint64_t address,
         physical_address = address;
         return physical_memory_.read_exclusive(address, output, version);
     }
-    std::array<std::uint64_t, 8> physical_addresses{};
+    std::array<std::uint64_t, 16> physical_addresses{};
     if (!translate_and_validate(address, output.size(), mmu::AccessType::Read,
                                 core::MemoryPermission::Read,
                                 physical_addresses)) return false;
@@ -195,7 +195,7 @@ bool CpuMemory::write_exclusive(const std::uint64_t address,
         return physical_memory_.write_exclusive(
             address, input, expected_version, stored);
     }
-    std::array<std::uint64_t, 8> physical_addresses{};
+    std::array<std::uint64_t, 16> physical_addresses{};
     if (!translate_and_validate(address, input.size(), mmu::AccessType::Write,
                                 core::MemoryPermission::Write,
                                 physical_addresses)) return false;
