@@ -567,7 +567,7 @@ int run_switch2_elf_homebrew(const std::filesystem::path& path,
               << "Final PC: 0x" << std::hex << context.program_counter << std::dec << "\n"
               << "Cached blocks compiled: " << cache.stats().blocks_compiled << "\n"
               << "Cache hits: " << cache.stats().cache_hits << "\n"
-              << "Stop reason: " << lucid::cpu::to_string(run.stop_reason) << "\n"
+              << "Stop reason: " << lucid::core::to_string(run.stop_reason) << "\n"
               << "Runner: cached A64 interpreter; no native JIT or Horizon OS.\n"
               << "GPU: no guest Ampere emulation; this test runner is CPU-only.\n";
     if (!run.instruction_budget_exhausted) {
