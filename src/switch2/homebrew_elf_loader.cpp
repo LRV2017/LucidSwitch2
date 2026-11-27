@@ -69,8 +69,10 @@ bool overlaps(const Segment& left, const Segment& right) noexcept {
 bool HomebrewElfLoader::load(const std::span<const std::uint8_t> image,
                              core::MemoryBus& memory,
                              HomebrewElfLoadInfo& info,
-                             std::string* error) const {
+                             std::string* error,
+                             std::uint64_t memory_budget) const {
     info = {};
+    memory_budget = std::min(memory_budget, MaxImageMemoryBytes);
     if (image.size() < ElfHeaderSize || image[0] != 0x7FU ||
         image[1] != 'E' || image[2] != 'L' || image[3] != 'F') {
         set_error(error, "Input is not an ELF image with a complete 64-byte header.");
@@ -144,7 +146,8 @@ bool HomebrewElfLoader::load(const std::span<const std::uint8_t> image,
             set_error(error, "ELF PT_LOAD segment grants no usable permissions.");
             return false;
         }
-        if (total_memory > MaxImageMemoryBytes - segment.memory_size) {
+        if (segment.memory_size > memory_budget ||
+            total_memory > memory_budget - segment.memory_size) {
             set_error(error, "ELF image exceeds the configured guest-memory budget.");
             return false;
         }

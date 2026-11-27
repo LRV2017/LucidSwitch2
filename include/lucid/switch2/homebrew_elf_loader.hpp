@@ -28,7 +28,8 @@ public:
     [[nodiscard]] bool load(std::span<const std::uint8_t> image,
                             core::MemoryBus& memory,
                             HomebrewElfLoadInfo& info,
-                            std::string* error = nullptr) const;
+                            std::string* error = nullptr,
+                            std::uint64_t memory_budget = MaxImageMemoryBytes) const;
 };
 
 } // namespace lucid::switch2

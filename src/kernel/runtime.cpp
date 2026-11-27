@@ -374,6 +374,48 @@ std::size_t Runtime::process_memory_bytes(const std::uint32_t process_id) const 
     return space==process_address_spaces_.end()?0U:space->second.mapped_bytes;
 }
 
+bool Runtime::load_process_elf(const std::uint32_t process_id,
+    const std::span<const std::uint8_t> image,const std::uint64_t stack_base,
+    const std::size_t stack_size,switch2::HomebrewElfLoadInfo& info,
+    std::string* error){
+    info={};
+    const auto space=process_address_spaces_.find(process_id);
+    if(!process_is_active(process_id)||space==process_address_spaces_.end()||
+       space->second.memory==nullptr){
+        set_error(error,"The target process does not have an active address space.");
+        return false;
+    }
+    if(stack_size==0U||(stack_base&0xFFFU)!=0U||(stack_size&0xFFFU)!=0U||
+       stack_size>MaximumProcessMemoryBytes||
+       space->second.mapped_bytes>MaximumProcessMemoryBytes-stack_size){
+        set_error(error,"The requested process stack is invalid or exceeds the process memory budget.");
+        return false;
+    }
+    const std::size_t image_budget=MaximumProcessMemoryBytes-
+        space->second.mapped_bytes-stack_size;
+    if(!space->second.memory->map_region(stack_base,stack_size,error,
+            core::MemoryPermission::ReadWrite))return false;
+
+    switch2::HomebrewElfLoader loader;
+    switch2::HomebrewElfLoadInfo candidate{};
+    if(!loader.load(image,*space->second.memory,candidate,error,
+            static_cast<std::uint64_t>(image_budget))){
+        (void)space->second.memory->unmap_region(stack_base,stack_size);
+        return false;
+    }
+    if(candidate.total_memory_bytes>
+       MaximumProcessMemoryBytes-space->second.mapped_bytes-stack_size){
+        (void)space->second.memory->unmap_region(stack_base,stack_size);
+        set_error(error,"ELF image and process stack exceed the process memory budget.");
+        return false;
+    }
+    space->second.mapped_bytes+=stack_size+
+        static_cast<std::size_t>(candidate.total_memory_bytes);
+    info=candidate;
+    return true;
+}
+
+
 bool Runtime::run_current(const std::uint64_t instruction_budget,
     ThreadRunReport& report,std::string* error){
     report={};

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lucid/cpu/block_cache.hpp"
+#include "lucid/switch2/homebrew_elf_loader.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -90,6 +91,10 @@ public:
         std::uint64_t address, std::span<const std::uint8_t> input,
         std::string* error = nullptr);
     [[nodiscard]] std::size_t process_memory_bytes(std::uint32_t process_id) const noexcept;
+    [[nodiscard]] bool load_process_elf(std::uint32_t process_id,
+        std::span<const std::uint8_t> image, std::uint64_t stack_base,
+        std::size_t stack_size, switch2::HomebrewElfLoadInfo& info,
+        std::string* error = nullptr);
     [[nodiscard]] bool run_current(std::uint64_t instruction_budget,
         ThreadRunReport& report, std::string* error = nullptr);
     [[nodiscard]] bool block_current(
