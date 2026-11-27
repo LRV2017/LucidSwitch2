@@ -244,6 +244,44 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
         return StepResult::Executed;
     }
 
+    // LDAR/STLR: aligned word/doubleword acquire loads and release stores.
+    // The current one-instruction-at-a-time execution model already sequences
+    // each memory operation; no host-thread ordering primitive is implied.
+    const std::uint32_t acquire_release_encoding = instruction & 0x3FFFFC00U;
+    if (acquire_release_encoding == 0x08DFFC00U ||
+        acquire_release_encoding == 0x089FFC00U) {
+        const unsigned size = (instruction >> 30U) & 0x3U;
+        if (size < 2U) return StepResult::UnsupportedInstruction;
+        const std::size_t transfer_size = std::size_t{1U} << size;
+        const bool load = acquire_release_encoding == 0x08DFFC00U;
+        const unsigned target = instruction & 0x1FU;
+        const unsigned base_register = (instruction >> 5U) & 0x1FU;
+        const std::uint64_t address = read_base_register(context, base_register);
+        if ((address % transfer_size) != 0U) return StepResult::MemoryFault;
+        std::array<std::uint8_t, 8U> bytes{};
+        if (load) {
+            if (!memory.read(address, std::span<std::uint8_t>(
+                    bytes.data(), transfer_size)))
+                return StepResult::MemoryFault;
+            std::uint64_t value = 0U;
+            for (std::size_t byte = 0U; byte < transfer_size; ++byte)
+                value |= static_cast<std::uint64_t>(bytes[byte]) << (byte * 8U);
+            write_register(context, target, value, size == 3U);
+        } else {
+            const std::uint64_t value =
+                read_register(context, target) & width_mask(size == 3U);
+            for (std::size_t byte = 0U; byte < transfer_size; ++byte)
+                bytes[byte] = static_cast<std::uint8_t>(
+                    (value >> (byte * 8U)) & 0xFFU);
+            if (!memory.write(address, std::span<const std::uint8_t>(
+                    bytes.data(), transfer_size)))
+                return StepResult::MemoryFault;
+        }
+        context.program_counter = next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
     // CLREX: discard this core's local exclusive reservation.
     if (instruction == 0xD5033F5FU) {
         context.clear_exclusive_monitor();

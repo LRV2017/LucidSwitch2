@@ -995,6 +995,32 @@ int main() {
            pair_state.v[6].high == 0xFFEEDDCCBBAA0099ULL,
            "LDR Q restores the complete 128-bit SIMD register");
 
+    // LDAR/STLR aligned word and doubleword acquire/release operations.
+    write32(pair_memory, pair_code + 0x28U, 0x889FFC62U); // STLR W2,[X3]
+    write32(pair_memory, pair_code + 0x2CU, 0x88DFFC20U); // LDAR W0,[X1]
+    write32(pair_memory, pair_code + 0x30U, 0xC89FFCE6U); // STLR X6,[X7]
+    write32(pair_memory, pair_code + 0x34U, 0xC8DFFCA4U); // LDAR X4,[X5]
+    const std::uint64_t atomic_data = pair_data + 0x80U;
+    pair_state = lucid::cpu::CpuContext{};
+    pair_state.x[1] = atomic_data;
+    pair_state.x[2] = 0xA1B2C3D4U;
+    pair_state.x[3] = atomic_data;
+    pair_state.program_counter = pair_code + 0x28U;
+    expect(cpu.step(pair_state, pair_memory) == lucid::cpu::StepResult::Executed &&
+           cpu.step(pair_state, pair_memory) == lucid::cpu::StepResult::Executed,
+           "execute STLR W followed by LDAR W");
+    expect(pair_state.x[0] == 0xA1B2C3D4U,
+           "LDAR W observes the preceding release store");
+    pair_state.x[5] = atomic_data + 8U;
+    pair_state.x[6] = 0x1122334455667788ULL;
+    pair_state.x[7] = atomic_data + 8U;
+    pair_state.program_counter = pair_code + 0x30U;
+    expect(cpu.step(pair_state, pair_memory) == lucid::cpu::StepResult::Executed &&
+           cpu.step(pair_state, pair_memory) == lucid::cpu::StepResult::Executed,
+           "execute STLR X followed by LDAR X");
+    expect(pair_state.x[4] == 0x1122334455667788ULL,
+           "LDAR X observes the preceding release store");
+
     if (failures != 0) {
         std::cerr << failures << " A64 test(s) failed.\n";
         return 1;

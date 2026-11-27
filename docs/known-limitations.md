@@ -167,3 +167,9 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 
 - Unsigned-immediate STR/LDR supports S (32-bit), D (64-bit), and Q (128-bit) SIMD/FP register transfers.
 - Unscaled, pre-index, post-index, register-offset, structure, lane, and replicate vector memory operations remain unsupported.
+
+
+## AArch64 acquire/release scalar memory operations
+
+- LDAR and STLR support aligned 32-bit and 64-bit general-register transfers.
+- Acquire/release sequencing is represented by synchronous instruction ordering only. There are no host-thread fences or weak-memory visibility rules until a true concurrent guest CPU scheduler is introduced.
