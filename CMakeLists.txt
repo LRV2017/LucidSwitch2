@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(LucidSwitch2 VERSION 0.28.0
+project(LucidSwitch2 VERSION 0.29.0
     DESCRIPTION "Clean-room console emulation research scaffold"
     LANGUAGES CXX
 )
@@ -37,6 +37,7 @@ add_library(lucid_core
     src/devices/interrupt_controller.cpp
     src/devices/controller_hub.cpp
     src/devices/audio_mixer.cpp
+    src/devices/sdl_host_io.cpp
     src/devices/virtual_timer.cpp
     src/devices/device_bus.cpp
     src/gpu/guest_memory.cpp

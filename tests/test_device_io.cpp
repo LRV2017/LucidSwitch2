@@ -1,5 +1,6 @@
 #include "lucid/devices/audio_mixer.hpp"
 #include "lucid/devices/controller_hub.hpp"
+#include "lucid/devices/sdl_host_io.hpp"
 
 #include <array>
 #include <cstdint>
@@ -63,5 +64,25 @@ void test_audio_mixer(){
            "report submitted and mixed PCM frame counts");
 }
 }
-int main(){test_controller_hub();test_audio_mixer();if(failures){std::cerr<<failures<<" device I/O test(s) failed.\n";return 1;}
+void test_optional_sdl_host_adapter() {
+    using namespace lucid::devices;
+    ControllerHub controllers;
+    AudioMixer mixer;
+    SdlHostIo host_io(controllers,mixer);
+    std::string error;
+    if(!SdlHostIo::compiled_with_sdl2()){
+        expect(!host_io.initialize(&error)&&!error.empty(),
+            "report a clear unavailable result when SDL2 is not compiled in");
+        expect(!host_io.open_audio_device(&error)&&!host_io.audio_device_open(),
+            "reject audio-device startup in a no-SDL build");
+        expect(host_io.poll_controllers()==0U,
+            "return no host controllers in a no-SDL build");
+    }else{
+        expect(true,"SDL2 host audio/controller adapter is compiled into this build");
+        expect(!host_io.audio_device_open(),
+            "keep audio device closed until explicitly requested");
+    }
+    host_io.shutdown();
+}
+int main(){test_controller_hub();test_audio_mixer();test_optional_sdl_host_adapter();if(failures){std::cerr<<failures<<" device I/O test(s) failed.\n";return 1;}
 std::cout<<"All device I/O tests passed.\n";return 0;}
