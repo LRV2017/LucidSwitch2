@@ -362,6 +362,30 @@ StepResult A64Interpreter::step_decoded(CpuContext& context, CpuMemory& memory,
     }
 
 
+    // AArch64 FEAT_LSE compare-and-swap. Rs contains the expected value
+    // and is replaced with the old memory value; Rt supplies the new value.
+    if ((instruction & 0x3FA07C00U) == 0x08A07C00U) {
+        const unsigned size_encoding=(instruction>>30U)&0x3U;
+        const std::size_t transfer_size=std::size_t{1U}<<size_encoding;
+        const unsigned expected_register=(instruction>>16U)&0x1FU;
+        const unsigned base_register=(instruction>>5U)&0x1FU;
+        const unsigned desired_register=instruction&0x1FU;
+        const std::uint64_t address=read_base_register(context,base_register);
+        if((address%transfer_size)!=0U)return StepResult::MemoryFault;
+        const std::uint64_t expected=read_register(context,expected_register);
+        const std::uint64_t desired=read_register(context,desired_register);
+        std::uint64_t previous=0U;
+        bool exchanged=false;
+        if(!memory.atomic_compare_exchange(address,transfer_size,expected,
+                                           desired,previous,exchanged))
+            return StepResult::MemoryFault;
+        (void)exchanged;
+        write_register(context,expected_register,previous,size_encoding==3U);
+        context.program_counter=next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
     // AArch64 FEAT_LSE atomic memory operations. One MemoryBus lock spans
     // the complete read/modify/write and updates exclusive-monitor versions.
     if ((instruction & 0x3F200C00U) == 0x38200000U) {

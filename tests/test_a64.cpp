@@ -1182,6 +1182,87 @@ int main() {
         reservation,exclusive_stored)&&!exclusive_stored,
         "LSE atomic update invalidates a peer's exclusive reservation");
 
+    // FEAT_LSE compare-and-swap instructions (AArch64 assembler fixtures).
+    write32(pair_memory,pair_code+0x68U,0x08A07C41U); // CASB W0,W1,[X2]
+    write32(pair_memory,pair_code+0x6CU,0x08E3FCA4U); // CASALB W3,W4,[X5]
+    write32(pair_memory,pair_code+0x70U,0x48A67D07U); // CASH W6,W7,[X8]
+    write32(pair_memory,pair_code+0x74U,0x48E9FD6AU); // CASALH W9,W10,[X11]
+    write32(pair_memory,pair_code+0x78U,0x88AC7DCDU); // CAS W12,W13,[X14]
+    write32(pair_memory,pair_code+0x7CU,0x88EFFE30U); // CASAL W15,W16,[X17]
+    write32(pair_memory,pair_code+0x80U,0xC8B27E93U); // CAS X18,X19,[X20]
+    write32(pair_memory,pair_code+0x84U,0xC8F5FEF6U); // CASAL X21,X22,[X23]
+
+    const std::uint64_t cas_data=pair_data+0xD0U;
+    pair_state=lucid::cpu::CpuContext{};
+    write_atomic_value(cas_data,1U,0x22U);
+    pair_state.x[0]=0x22U;pair_state.x[1]=0x33U;pair_state.x[2]=cas_data;
+    pair_state.program_counter=pair_code+0x68U;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[0]==0x22U&&read_atomic_value(cas_data,1U)==0x33U,
+        "CASB replaces a matching byte and returns its previous value");
+
+    write_atomic_value(cas_data+1U,1U,0x44U);
+    pair_state.x[3]=0x11U;pair_state.x[4]=0x55U;pair_state.x[5]=cas_data+1U;
+    pair_state.program_counter=pair_code+0x6CU;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[3]==0x44U&&read_atomic_value(cas_data+1U,1U)==0x44U,
+        "CASALB mismatch returns memory to the expected register without storing");
+
+    write_atomic_value(cas_data+2U,2U,0x1234U);
+    pair_state.x[6]=0x1234U;pair_state.x[7]=0xABCDU;pair_state.x[8]=cas_data+2U;
+    pair_state.program_counter=pair_code+0x70U;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[6]==0x1234U&&read_atomic_value(cas_data+2U,2U)==0xABCDU,
+        "CASH compares and replaces a halfword");
+
+    write_atomic_value(cas_data+4U,2U,0x5678U);
+    pair_state.x[9]=0x1111U;pair_state.x[10]=0x9999U;pair_state.x[11]=cas_data+4U;
+    pair_state.program_counter=pair_code+0x74U;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[9]==0x5678U&&read_atomic_value(cas_data+4U,2U)==0x5678U,
+        "CASALH mismatch preserves memory and reports the old halfword");
+
+    write_atomic_value(cas_data+8U,4U,0x12345678U);
+    pair_state.x[12]=0x12345678U;pair_state.x[13]=0xABCDEF01U;
+    pair_state.x[14]=cas_data+8U;pair_state.program_counter=pair_code+0x78U;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[12]==0x12345678U&&
+           read_atomic_value(cas_data+8U,4U)==0xABCDEF01U,
+        "CAS replaces a matching word");
+
+    write_atomic_value(cas_data+12U,4U,0xCAFEBABEU);
+    pair_state.x[15]=0x11111111U;pair_state.x[16]=0x22222222U;
+    pair_state.x[17]=cas_data+12U;pair_state.program_counter=pair_code+0x7CU;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[15]==0xCAFEBABEU&&
+           read_atomic_value(cas_data+12U,4U)==0xCAFEBABEU,
+        "CASAL word mismatch returns old value without changing memory");
+
+    write_atomic_value(cas_data+16U,8U,0x0123456789ABCDEFULL);
+    pair_state.x[18]=0x0123456789ABCDEFULL;
+    pair_state.x[19]=0xFEDCBA9876543210ULL;
+    pair_state.x[20]=cas_data+16U;pair_state.program_counter=pair_code+0x80U;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[18]==0x0123456789ABCDEFULL&&
+           read_atomic_value(cas_data+16U,8U)==0xFEDCBA9876543210ULL,
+        "CAS exchanges a matching doubleword");
+
+    write_atomic_value(cas_data+24U,8U,0xAABBCCDDEEFF0011ULL);
+    pair_state.x[21]=0x1111U;pair_state.x[22]=0x2222U;
+    pair_state.x[23]=cas_data+24U;pair_state.program_counter=pair_code+0x84U;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[21]==0xAABBCCDDEEFF0011ULL&&
+           read_atomic_value(cas_data+24U,8U)==0xAABBCCDDEEFF0011ULL,
+        "CASAL doubleword mismatch updates the expected register");
+
+    pair_state.x[20]=cas_data+17U;
+    pair_state.program_counter=pair_code+0x80U;
+    const auto cas_misaligned_before=pair_state;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::MemoryFault&&
+           pair_state.program_counter==cas_misaligned_before.program_counter&&
+           pair_state.x==cas_misaligned_before.x,
+        "reject misaligned CAS without changing CPU state");
+
     if (failures != 0) {
         std::cerr << failures << " A64 test(s) failed.\n";
         return 1;
