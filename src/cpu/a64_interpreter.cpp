@@ -362,6 +362,40 @@ StepResult A64Interpreter::step_decoded(CpuContext& context, CpuMemory& memory,
     }
 
 
+    // LSE compare-and-swap pair (CASP/CASPA/CASPL/CASPAL). The
+    // even-numbered register pairs contain expected and replacement values.
+    if ((instruction & 0x3F207C00U) == 0x08207C00U) {
+        const unsigned size_encoding=(instruction>>30U)&1U;
+        const std::size_t element_size=size_encoding!=0U?8U:4U;
+        const std::size_t total_size=element_size*2U;
+        const unsigned expected_register=(instruction>>16U)&0x1FU;
+        const unsigned base_register=(instruction>>5U)&0x1FU;
+        const unsigned desired_register=instruction&0x1FU;
+        const bool acquire=((instruction>>22U)&1U)!=0U;
+        const bool release=((instruction>>15U)&1U)!=0U;
+        (void)acquire;
+        (void)release;
+        if((expected_register&1U)!=0U||(desired_register&1U)!=0U)
+            return StepResult::UnsupportedInstruction;
+        const std::uint64_t address=read_base_register(context,base_register);
+        if((address%total_size)!=0U)return StepResult::MemoryFault;
+        const std::uint64_t expected_low=read_register(context,expected_register);
+        const std::uint64_t expected_high=read_register(context,expected_register+1U);
+        const std::uint64_t desired_low=read_register(context,desired_register);
+        const std::uint64_t desired_high=read_register(context,desired_register+1U);
+        std::uint64_t previous_low=0U,previous_high=0U;
+        bool exchanged=false;
+        if(!memory.atomic_compare_exchange_pair(address,element_size,
+            expected_low,expected_high,desired_low,desired_high,
+            previous_low,previous_high,exchanged))return StepResult::MemoryFault;
+        (void)exchanged;
+        write_register(context,expected_register,previous_low,size_encoding==1U);
+        write_register(context,expected_register+1U,previous_high,size_encoding==1U);
+        context.program_counter=next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
     // AArch64 FEAT_LSE compare-and-swap. Rs contains the expected value
     // and is replaced with the old memory value; Rt supplies the new value.
     if ((instruction & 0x3FA07C00U) == 0x08A07C00U) {

@@ -1263,6 +1263,76 @@ int main() {
            pair_state.x==cas_misaligned_before.x,
         "reject misaligned CAS without changing CPU state");
 
+    // FEAT_LSE paired compare-and-swap instructions.
+    write32(pair_memory,pair_code+0x88U,0x08207C82U); // CASP W0,W1,W2,W3,[X4]
+    write32(pair_memory,pair_code+0x8CU,0x0864FD06U); // CASPAL W4,W5,W6,W7,[X8]
+    write32(pair_memory,pair_code+0x90U,0x48287D8AU); // CASP X8,X9,X10,X11,[X12]
+    write32(pair_memory,pair_code+0x94U,0x486CFE0EU); // CASPAL X12,X13,X14,X15,[X16]
+
+    auto write_atomic_pair=[&](const std::uint64_t address,const std::size_t element_size,
+                               const std::uint64_t low,const std::uint64_t high){
+        write_atomic_value(address,element_size,low);
+        write_atomic_value(address+element_size,element_size,high);
+    };
+    auto read_atomic_pair=[&](const std::uint64_t address,const std::size_t element_size){
+        return std::array<std::uint64_t,2U>{
+            read_atomic_value(address,element_size),
+            read_atomic_value(address+element_size,element_size)};
+    };
+    const std::uint64_t casp_word_address=pair_data+0xD0U;
+    write_atomic_pair(casp_word_address,4U,0x1111U,0x2222U);
+    pair_state=lucid::cpu::CpuContext{};
+    pair_state.x[0]=0x1111U;pair_state.x[1]=0x2222U;
+    pair_state.x[2]=0x3333U;pair_state.x[3]=0x4444U;
+    pair_state.x[4]=casp_word_address;pair_state.program_counter=pair_code+0x88U;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[0]==0x1111U&&pair_state.x[1]==0x2222U&&
+           read_atomic_pair(casp_word_address,4U)==std::array<std::uint64_t,2U>{0x3333U,0x4444U},
+        "CASP atomically compares and swaps a pair of 32-bit words");
+
+    const std::uint64_t caspal_word_address=pair_data+0xD8U;
+    write_atomic_pair(caspal_word_address,4U,0xAAAAU,0xBBBBU);
+    pair_state.x[4]=0x1111U;pair_state.x[5]=0x2222U;
+    pair_state.x[6]=0xCCCCU;pair_state.x[7]=0xDDDDU;
+    pair_state.x[8]=caspal_word_address;pair_state.program_counter=pair_code+0x8CU;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[4]==0xAAAAU&&pair_state.x[5]==0xBBBBU&&
+           read_atomic_pair(caspal_word_address,4U)==std::array<std::uint64_t,2U>{0xAAAAU,0xBBBBU},
+        "CASPAL mismatch returns both old words without modifying memory");
+
+    const std::uint64_t casp_double_address=pair_data+0xE0U;
+    write_atomic_pair(casp_double_address,8U,0x1111222233334444ULL,
+                      0xAAAABBBBCCCCDDDDULL);
+    pair_state.x[8]=0x1111222233334444ULL;
+    pair_state.x[9]=0xAAAABBBBCCCCDDDDULL;
+    pair_state.x[10]=0x0123456789ABCDEFULL;
+    pair_state.x[11]=0xFEDCBA9876543210ULL;
+    pair_state.x[12]=casp_double_address;pair_state.program_counter=pair_code+0x90U;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[8]==0x1111222233334444ULL&&
+           pair_state.x[9]==0xAAAABBBBCCCCDDDDULL&&
+           read_atomic_pair(casp_double_address,8U)==
+             std::array<std::uint64_t,2U>{0x0123456789ABCDEFULL,0xFEDCBA9876543210ULL},
+        "CASP atomically compares and swaps a pair of 64-bit doublewords");
+
+    pair_state.x[12]=0x0U;pair_state.x[13]=0x1U;
+    pair_state.x[14]=0x2222U;pair_state.x[15]=0x3333U;
+    pair_state.x[16]=casp_double_address;pair_state.program_counter=pair_code+0x94U;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[12]==0x0123456789ABCDEFULL&&
+           pair_state.x[13]==0xFEDCBA9876543210ULL&&
+           read_atomic_pair(casp_double_address,8U)==
+             std::array<std::uint64_t,2U>{0x0123456789ABCDEFULL,0xFEDCBA9876543210ULL},
+        "CASPAL mismatch returns the previous 128-bit pair without a partial store");
+
+    pair_state.x[16]=casp_double_address+1U;
+    pair_state.program_counter=pair_code+0x94U;
+    const auto casp_misaligned_before=pair_state;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::MemoryFault&&
+           pair_state.program_counter==casp_misaligned_before.program_counter&&
+           pair_state.x==casp_misaligned_before.x,
+        "reject misaligned 128-bit CASP without changing CPU state");
+
     if (failures != 0) {
         std::cerr << failures << " A64 test(s) failed.\n";
         return 1;
