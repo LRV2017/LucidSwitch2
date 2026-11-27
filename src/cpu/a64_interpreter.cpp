@@ -1209,11 +1209,65 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
         return StepResult::Executed;
     }
 
-    // Unsigned-immediate scalar LDR/STR for byte, halfword, word and X-register sizes.
-    // Register 31 is SP for the address base and XZR/WZR for transferred data.
+    // Unsigned-immediate scalar LDR/STR, including SIMD/FP S/D/Q registers.
     if ((instruction & 0x3B000000U) == 0x39000000U) {
-        if ((instruction & 0x04000000U) != 0U)
-            return StepResult::UnsupportedInstruction;
+        if ((instruction & 0x04000000U) != 0U) {
+            const unsigned size = (instruction >> 30U) & 0x3U;
+            const unsigned opc = (instruction >> 22U) & 0x3U;
+            std::size_t transfer_size = 0U;
+            unsigned scale = 0U;
+            if (size == 2U && opc <= 1U) { transfer_size = 4U; scale = 2U; }
+            else if (size == 3U && opc <= 1U) { transfer_size = 8U; scale = 3U; }
+            else if (size == 0U && (opc == 2U || opc == 3U)) {
+                transfer_size = 16U; scale = 4U;
+            } else {
+                return StepResult::UnsupportedInstruction;
+            }
+            const bool load = (opc & 1U) != 0U;
+            const unsigned target = instruction & 0x1FU;
+            const unsigned base_register = (instruction >> 5U) & 0x1FU;
+            const std::uint64_t base = read_base_register(context, base_register);
+            const std::uint64_t offset =
+                static_cast<std::uint64_t>((instruction >> 10U) & 0xFFFU) << scale;
+            if (base > std::numeric_limits<std::uint64_t>::max() - offset)
+                return StepResult::MemoryFault;
+            const std::uint64_t address = base + offset;
+            std::array<std::uint8_t, 16U> bytes{};
+            if (load) {
+                if (!memory.read(address, std::span<std::uint8_t>(
+                        bytes.data(), transfer_size)))
+                    return StepResult::MemoryFault;
+                std::uint64_t low = 0U;
+                std::uint64_t high = 0U;
+                for (std::size_t byte = 0U; byte <
+                     std::min<std::size_t>(transfer_size, 8U); ++byte)
+                    low |= static_cast<std::uint64_t>(bytes[byte]) << (byte * 8U);
+                if (transfer_size == 16U) {
+                    for (std::size_t byte = 0U; byte < 8U; ++byte)
+                        high |= static_cast<std::uint64_t>(
+                            bytes[8U + byte]) << (byte * 8U);
+                }
+                context.v[target] = {low, high};
+            } else {
+                const std::uint64_t low = context.v[target].low;
+                for (std::size_t byte = 0U; byte <
+                     std::min<std::size_t>(transfer_size, 8U); ++byte)
+                    bytes[byte] = static_cast<std::uint8_t>(
+                        (low >> (byte * 8U)) & 0xFFU);
+                if (transfer_size == 16U) {
+                    const std::uint64_t high = context.v[target].high;
+                    for (std::size_t byte = 0U; byte < 8U; ++byte)
+                        bytes[8U + byte] = static_cast<std::uint8_t>(
+                            (high >> (byte * 8U)) & 0xFFU);
+                }
+                if (!memory.write(address, std::span<const std::uint8_t>(
+                        bytes.data(), transfer_size)))
+                    return StepResult::MemoryFault;
+            }
+            context.program_counter = next_pc;
+            ++context.instructions_retired;
+            return StepResult::Executed;
+        }
         const unsigned size = (instruction >> 30U) & 0x3U;
         const unsigned opc = (instruction >> 22U) & 0x3U;
         if (opc > 1U) {

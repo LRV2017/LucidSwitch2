@@ -963,6 +963,38 @@ int main() {
            pair_state.v[7].high == 0xFEDCBA9876543210ULL,
            "SIMD Q pair loads all 128 bits from its 32-byte memory range");
 
+    // Unsigned-offset SIMD/FP single-register LDR/STR S, D and Q forms.
+    write32(pair_memory, pair_code + 0x10U, 0xBD000420U); // STR S0,[X1,#4]
+    write32(pair_memory, pair_code + 0x14U, 0xBD400422U); // LDR S2,[X1,#4]
+    write32(pair_memory, pair_code + 0x18U, 0xFD000423U); // STR D3,[X1,#8]
+    write32(pair_memory, pair_code + 0x1CU, 0xFD400424U); // LDR D4,[X1,#8]
+    write32(pair_memory, pair_code + 0x20U, 0x3D800425U); // STR Q5,[X1,#16]
+    write32(pair_memory, pair_code + 0x24U, 0x3DC00426U); // LDR Q6,[X1,#16]
+    pair_state.x[1] = pair_data + 0x40U;
+    pair_state.v[0] = {0xFFFFFFFFAABBCCDDULL, 0x1111222233334444ULL};
+    pair_state.program_counter = pair_code + 0x10U;
+    expect(cpu.step(pair_state, pair_memory) == lucid::cpu::StepResult::Executed &&
+           cpu.step(pair_state, pair_memory) == lucid::cpu::StepResult::Executed,
+           "execute unsigned-offset STR/LDR S-register");
+    expect(pair_state.v[2].low == 0xAABBCCDDU && pair_state.v[2].high == 0U,
+           "LDR S zeroes bits above its 32-bit payload");
+    pair_state.v[3] = {0x0123456789ABCDEFULL, 0xAAAAAAAAAAAAAAAAULL};
+    pair_state.program_counter = pair_code + 0x18U;
+    expect(cpu.step(pair_state, pair_memory) == lucid::cpu::StepResult::Executed &&
+           cpu.step(pair_state, pair_memory) == lucid::cpu::StepResult::Executed,
+           "execute unsigned-offset STR/LDR D-register");
+    expect(pair_state.v[4].low == 0x0123456789ABCDEFULL &&
+           pair_state.v[4].high == 0U,
+           "LDR D zeroes bits above its 64-bit payload");
+    pair_state.v[5] = {0x8877665544332211ULL, 0xFFEEDDCCBBAA0099ULL};
+    pair_state.program_counter = pair_code + 0x20U;
+    expect(cpu.step(pair_state, pair_memory) == lucid::cpu::StepResult::Executed &&
+           cpu.step(pair_state, pair_memory) == lucid::cpu::StepResult::Executed,
+           "execute unsigned-offset STR/LDR Q-register");
+    expect(pair_state.v[6].low == 0x8877665544332211ULL &&
+           pair_state.v[6].high == 0xFFEEDDCCBBAA0099ULL,
+           "LDR Q restores the complete 128-bit SIMD register");
+
     if (failures != 0) {
         std::cerr << failures << " A64 test(s) failed.\n";
         return 1;

@@ -161,3 +161,9 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 
 - LDP/STP supports selected S, D, and Q SIMD/FP register pairs with signed-offset, pre-index, and post-index addressing.
 - Single-element vector loads/stores, LD1/ST1 structure operations, lane loads/stores, replicate loads, and SIMD/FP register-offset addressing remain unsupported.
+
+
+## SIMD/FP single-register unsigned-offset loads and stores
+
+- Unsigned-immediate STR/LDR supports S (32-bit), D (64-bit), and Q (128-bit) SIMD/FP register transfers.
+- Unscaled, pre-index, post-index, register-offset, structure, lane, and replicate vector memory operations remain unsupported.
