@@ -121,12 +121,103 @@ void test_process_owned_handles() {
                                   handle, &error),
            "prevent thread creation in a terminated process");
 }
+void test_event_semaphore_and_mutex_primitives() {
+    lucid::kernel::Runtime runtime;
+    std::uint32_t process=0U, thread_a=0U, thread_b=0U, next=0U;
+    std::string error;
+    expect(runtime.create_process("sync-tests",process,&error),
+        "create process for kernel synchronization tests");
+    expect(runtime.create_thread(process,0x1000U,0x8000U,5U,0U,thread_a,&error)&&
+           runtime.create_thread(process,0x2000U,0x9000U,10U,0U,thread_b,&error),
+        "create two threads for event and mutex behavior");
+    expect(runtime.schedule_next(next,&error)&&next==thread_a,
+        "schedule first synchronization test thread");
+
+    std::uint32_t event=0U;
+    bool signaled=false;
+    expect(runtime.create_event(process,false,false,event,&error),
+        "create manual-reset event");
+    expect(runtime.try_wait_event(process,event,signaled,&error)&&!signaled,
+        "manual-reset event begins unsignaled");
+    std::uint64_t event_id=0U;
+    expect(runtime.resolve_handle(process,event,lucid::kernel::KernelObjectType::Event,event_id),
+        "resolve event wait key");
+    expect(runtime.block_current(event_id,next,&error)&&next==thread_b,
+        "block current thread on event object wait key");
+    expect(runtime.signal_event(process,event,&error),
+        "signal event and wake matching waiters");
+    lucid::kernel::ThreadInfo blocked_info{};
+    expect(runtime.get_thread(thread_a,blocked_info)&&
+           blocked_info.state==lucid::kernel::ThreadState::Ready,
+        "event signal returns blocked thread to ready queue");
+    expect(runtime.try_wait_event(process,event,signaled,&error)&&signaled,
+        "manual-reset event remains signaled after observation");
+    expect(runtime.try_wait_event(process,event,signaled,&error)&&signaled,
+        "manual-reset event remains signaled for subsequent waiters");
+    expect(runtime.clear_event(process,event,&error),
+        "clear a manual-reset event");
+    expect(runtime.try_wait_event(process,event,signaled,&error)&&!signaled,
+        "cleared event returns to unsignaled state");
+
+    std::uint32_t auto_event=0U;
+    expect(runtime.create_event(process,true,true,auto_event,&error),
+        "create initially signaled auto-reset event");
+    expect(runtime.try_wait_event(process,auto_event,signaled,&error)&&signaled,
+        "consume a signaled auto-reset event");
+    expect(runtime.try_wait_event(process,auto_event,signaled,&error)&&!signaled,
+        "auto-reset event clears after one successful wait");
+
+    std::uint32_t semaphore=0U, previous=0U;
+    bool acquired=false;
+    expect(runtime.create_semaphore(process,1U,2U,semaphore,&error),
+        "create semaphore with bounded initial count");
+    expect(runtime.try_wait_semaphore(process,semaphore,acquired,&error)&&acquired,
+        "consume an available semaphore permit");
+    expect(runtime.try_wait_semaphore(process,semaphore,acquired,&error)&&!acquired,
+        "report unavailable semaphore without blocking host thread");
+    expect(runtime.release_semaphore(process,semaphore,2U,previous,&error)&&previous==0U,
+        "release multiple permits and report previous count");
+    expect(!runtime.release_semaphore(process,semaphore,1U,previous,&error),
+        "reject semaphore release beyond configured maximum");
+    expect(runtime.try_wait_semaphore(process,semaphore,acquired,&error)&&acquired,
+        "consume released semaphore permit");
+
+    std::uint32_t mutex=0U;
+    expect(runtime.create_mutex(process,true,mutex,&error),
+        "create recursive kernel mutex");
+    expect(runtime.try_lock_mutex(process,mutex,thread_a,acquired,&error)&&acquired,
+        "acquire an unowned mutex");
+    expect(runtime.try_lock_mutex(process,mutex,thread_a,acquired,&error)&&acquired,
+        "allow the owning thread to recursively acquire a recursive mutex");
+    expect(!runtime.unlock_mutex(process,mutex,thread_b,&error),
+        "reject mutex release by a non-owner thread");
+    expect(runtime.unlock_mutex(process,mutex,thread_a,&error),
+        "release one recursive mutex acquisition");
+    expect(runtime.try_lock_mutex(process,mutex,thread_b,acquired,&error)&&!acquired,
+        "prevent a competing thread from acquiring a held mutex");
+    expect(runtime.unlock_mutex(process,mutex,thread_a,&error),
+        "release the final recursive mutex acquisition");
+    expect(runtime.try_lock_mutex(process,mutex,thread_b,acquired,&error)&&acquired,
+        "allow another thread to acquire a released mutex");
+    expect(runtime.unlock_mutex(process,mutex,thread_b,&error),
+        "allow mutex owner to release ownership");
+
+    expect(runtime.close_handle(process,event)&&runtime.close_handle(process,auto_event)&&
+           runtime.close_handle(process,semaphore)&&runtime.close_handle(process,mutex),
+        "close all synchronization-object handles");
+    expect(runtime.handle_count()==0U,
+        "remove synchronization handles and prune unreferenced objects");
+    expect(!runtime.try_wait_event(process,event,signaled,&error),
+        "reject event operations after handle closure");
+}
+
 } // namespace
 
 int main() {
     test_process_and_thread_creation();
     test_priority_scheduling_and_waits();
     test_process_owned_handles();
+    test_event_semaphore_and_mutex_primitives();
     if (failures != 0) {
         std::cerr << failures << " kernel runtime test(s) failed.\n";
         return 1;

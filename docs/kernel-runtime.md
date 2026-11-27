@@ -24,3 +24,8 @@ This is an original, deterministic host-side substrate for future guest-process 
 ## Design constraints
 
 The runtime is single-host-thread and deterministic. It uses bounded tables and no background threads. Wait keys are opaque scheduler identifiers, not guest-visible Horizon handles. Kernel handles are process-local and identify typed host-side objects only; object implementations and service protocols remain future work.
+
+
+## Synchronization object substrate
+
+The host-side Runtime now implements manual/auto-reset events, bounded counting semaphores, and ownership-checked recursive mutexes behind process-owned typed handles. Event and semaphore probes are nonblocking; callers can resolve the object's ID, block a cooperative thread on that wait key, then signal/release the object to wake waiters. Mutex unlock wakes threads on its wait key. This provides testable synchronization semantics but is not the Horizon SVC ABI, a real-time scheduler, priority inheritance, or a full kernel object/handle-transfer implementation.

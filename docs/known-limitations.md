@@ -195,3 +195,9 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 - `--run-switch2-elf` loads only bounded static ELF64 little-endian AArch64 `ET_EXEC` homebrew segments and runs them with the cached A64 interpreter and a generic test stack.
 - It does not create Horizon process metadata, TLS, IPC command buffers, application launch arguments, system-service sessions, or a guest GPU context. The CPU starts from the supplied ELF entry point and is instruction-budgeted.
 - The command is a loader/execution test harness. A program reaching its instruction budget is not evidence that it is a Switch 2 game or Horizon application.
+
+
+## Kernel synchronization object limitations
+
+- Runtime supports host-side manual/auto-reset events, counting semaphores and recursive mutex ownership through process-owned handles. Wait probes are nonblocking and use the cooperative wait-key scheduler; they are not a drop-in Horizon WaitSynchronization/ArbitrateLock ABI.
+- Priority inheritance, robust mutex owner death semantics, timeout clocks, wait-all, cancellation races and cross-process handle transfer are not implemented.
