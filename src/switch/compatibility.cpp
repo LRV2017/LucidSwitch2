@@ -30,7 +30,7 @@ constexpr HardwareProfile kSwitch2{
     "Nintendo confirms custom NVIDIA processor; T239-level detail is community reverse-engineered"
 };
 
-constexpr std::array<CompatibilityFeature, 17U> kCommonFeatures{{
+constexpr std::array<CompatibilityFeature, 18U> kCommonFeatures{{
     {"CPU", "AArch64 scalar integer interpreter", ImplementationStatus::Partial,
      "MOVN, ADR/ADRP, logical immediates, conditional selects, division, variable shifts, multiply-accumulate and linked branches are covered; the instruction set remains incomplete."},
     {"CPU", "Scalar S/D floating-point and FMOV", ImplementationStatus::Partial,
@@ -64,7 +64,9 @@ constexpr std::array<CompatibilityFeature, 17U> kCommonFeatures{{
     {"Input", "Host-neutral controller snapshot hub", ImplementationStatus::Partial,
      "Up to eight synchronized button/axis/trigger snapshots are supported; physical discovery, motion, NFC, rumble and Horizon input services are not connected."},
     {"CPU", "AArch64 generation-aware basic-block cache", ImplementationStatus::Partial,
-     "Caches short validated instruction blocks and invalidates them when the backing memory generation changes. Blocks still execute through the interpreter; no native machine-code JIT or optimizing register allocator is present."}
+     "Caches short validated instruction blocks and invalidates them when the backing memory generation changes. Blocks still execute through the interpreter; no native machine-code JIT or optimizing register allocator is present."},
+    {"Graphics", "GPU virtual address-space mappings", ImplementationStatus::Partial,
+     "A generic 4 KiB page-aligned GPU virtual memory map translates guest GPU addresses onto shared physical memory with read/write/execute permissions. It is not the Switch 2 Tegra GPU MMU or a console page-table implementation."}
 }};
 
 constexpr CompatibilityFeature kOriginalExecutableFeature{

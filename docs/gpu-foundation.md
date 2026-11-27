@@ -93,3 +93,10 @@ Indexed vertex data contains six little-endian uint32 words per vertex: X float,
 - SDL2 swapchain presentation requires a working desktop display and suitable Vulkan surface support. The off-screen path works without a window.
 
 References: Khronos Vulkan graphics pipeline (https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/02_Graphics_pipeline_basics/00_Introduction.html), Khronos swapchain overview (https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/01_Presentation/01_Swap_chain.html), and SDL2 Vulkan surface creation (https://wiki.libsdl.org/SDL2/SDL_Vulkan_CreateSurface).
+
+
+## GPU virtual-address space groundwork
+
+The generic GPU address-space layer maps 4 KiB-aligned GPU virtual ranges onto checked shared physical memory. Mappings enforce read/write/execute permissions, can be protected or unmapped by exact region, support adjacent ranges for cross-page accesses, and alias the same backing physical bytes when mapped to the same address. `GpuCommandProcessor` consumes a read-only `GpuMemoryView`, so command, vertex, index, and texture buffers can be read from either a flat test allocation or the sparse mapped address space.
+
+This is generic MMU groundwork only. It does not implement the Tegra GPU MMU page-table format, GPU page compression, swizzling/tiling, sparse residency, page faults, DMA engines, cache operators, GPU VMID/ASID behavior, or Switch 2 Ampere command channels.

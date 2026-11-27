@@ -14,6 +14,8 @@ An experimental, clean-room emulator research project focused on building a lawf
 
 ## Current foundation
 
+- GPU memory mapping foundation: sparse 4 KiB GPU virtual mappings onto shared guest physical memory, permissions, exact unmap/protect, cross-page reads/writes and aliasing; this is generic GPU MMU infrastructure, not the Switch 2 Tegra GPU MMU.
+
 - Switch 2 static homebrew loader: accepts bounded ELF64 little-endian AArch64 `ET_EXEC` segments, validates ranges/alignments/entry point, zero-fills BSS, enforces W^X mappings, and rolls back mappings on load failure. `lucidswitch2 --run-switch2-elf <homebrew.elf> [instruction-budget]` runs the image through the cached A64 interpreter with a bounded test stack; it is not a Horizon process launcher or Nintendo retail package loader.
 - Device I/O foundations: a synchronized eight-slot controller snapshot hub and a 16-channel signed-16-bit stereo PCM mixer with Q15 gain and saturation. No native device discovery or console DSP emulation is claimed yet.
 

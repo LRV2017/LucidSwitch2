@@ -1,5 +1,6 @@
 #include "lucid/gpu/command_processor.hpp"
 #include "lucid/gpu/guest_memory.hpp"
+#include "lucid/gpu/gpu_address_space.hpp"
 #include "lucid/gpu/software_backend.hpp"
 #include "lucid/gpu/vulkan_backend.hpp"
 #include "lucid/gpu/window_presenter.hpp"
@@ -52,6 +53,46 @@ void test_guest_memory() {
     expect(memory.fill(0x800010U, 4U, 0xA5U) &&
            memory.read(0x800010U, target) && target[0] == 0xA5U &&
            target[3] == 0xA5U, "fill guest GPU memory range");
+}
+
+void test_gpu_virtual_address_space() {
+    using namespace lucid;
+    constexpr std::uint64_t physical_base=0x400000U;
+    constexpr std::uint64_t gpu_base=0x10000000U;
+    core::MemoryBus physical;
+    std::string error;
+    expect(physical.map_region(physical_base,0x3000U,&error,
+        core::MemoryPermission::ReadWrite),"map physical memory for GPU address-space test");
+    gpu::GpuAddressSpace gpu_memory(physical);
+    expect(!gpu_memory.valid(),"new GPU address space begins without mappings");
+    expect(gpu_memory.map(gpu_base,physical_base,0x1000U,
+        core::MemoryPermission::ReadWrite,&error),"map first GPU virtual page");
+    expect(gpu_memory.map(gpu_base+0x1000U,physical_base+0x1000U,0x1000U,
+        core::MemoryPermission::ReadWrite,&error),"map adjacent GPU virtual page");
+    expect(gpu_memory.valid()&&gpu_memory.mapping_count()==2U,
+        "track valid GPU address-space mappings");
+    const std::array<std::uint8_t,8U> payload{1U,2U,3U,4U,5U,6U,7U,8U};
+    expect(gpu_memory.write(gpu_base+0xFFCU,payload),
+        "write across adjacent GPU virtual page mappings");
+    std::array<std::uint8_t,8U> readback{};
+    expect(gpu_memory.read(gpu_base+0xFFCU,readback)&&readback==payload,
+        "read cross-page GPU virtual memory data");
+    std::array<std::uint8_t,8U> physical_readback{};
+    expect(physical.read(physical_base+0xFFCU,physical_readback)&&
+        physical_readback==payload,"GPU virtual mapping aliases shared physical backing");
+    expect(!gpu_memory.map(gpu_base,physical_base+0x2000U,0x1000U,
+        core::MemoryPermission::ReadWrite,&error),"reject overlapping GPU virtual maps");
+    expect(!gpu_memory.map(gpu_base+0x3000U,physical_base+1U,0x1000U,
+        core::MemoryPermission::ReadWrite,&error),"reject unaligned physical GPU mappings");
+    expect(!gpu_memory.read(gpu_base+0x2000U,readback),
+        "reject access to unmapped GPU virtual memory");
+    expect(gpu_memory.protect(gpu_base,0x1000U,core::MemoryPermission::Read,&error),
+        "reduce GPU page permissions to read-only");
+    expect(!gpu_memory.write(gpu_base,payload),"reject writes to a read-only GPU page");
+    expect(gpu_memory.read(gpu_base,readback),"retain reads from read-only GPU page");
+    expect(gpu_memory.unmap(gpu_base,0x1000U,&error),"unmap an exact GPU virtual mapping");
+    expect(!gpu_memory.read(gpu_base,readback),"reject access after GPU mapping removal");
+    expect(gpu_memory.mapping_count()==1U,"preserve other GPU mappings after unmap");
 }
 
 void test_command_processor_and_software_renderer() {
@@ -372,6 +413,7 @@ void test_native_vulkan_rendering() {
 
 int main() {
     test_guest_memory();
+    test_gpu_virtual_address_space();
     test_command_processor_and_software_renderer();
     test_invalid_streams_are_rejected_before_execution();
     test_indexed_geometry_texture_and_depth();
