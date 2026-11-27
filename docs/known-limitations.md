@@ -155,3 +155,9 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 - DMB and DSB encodings with non-reserved option fields, plus ISB SY, are recognized.
 - These instructions retire as sequencing points because the current interpreter executes one guest instruction at a time, memory writes complete synchronously, and instruction fetch is performed afresh for each step.
 - This does not implement host-thread fences, a weakly ordered guest memory model, cache maintenance, instruction-cache synchronization, or true SMP ordering. A concurrent CPU/JIT backend must replace this simplified behavior with an explicit architectural memory model.
+
+
+## SIMD/FP register-pair memory operations
+
+- LDP/STP supports selected S, D, and Q SIMD/FP register pairs with signed-offset, pre-index, and post-index addressing.
+- Single-element vector loads/stores, LD1/ST1 structure operations, lane loads/stores, replicate loads, and SIMD/FP register-offset addressing remain unsupported.

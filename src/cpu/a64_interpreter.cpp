@@ -883,8 +883,8 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
         return StepResult::Executed;
     }
 
-    // Integer LDP/STP register pairs: signed offset, pre-index and post-index.
-    // The SIMD/FP pair encoding (V=1) and non-temporal mode are not implemented.
+    // LDP/STP register pairs: integer W/X and SIMD/FP S/D/Q forms.
+    // Supports signed-offset, pre-index and post-index addressing.
     if ((instruction & 0x3A000000U) == 0x28000000U) {
         const bool vector_pair = (instruction & 0x04000000U) != 0U;
         const unsigned opc = (instruction >> 30U) & 0x3U;
@@ -895,15 +895,16 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
         const unsigned target_second = (instruction >> 10U) & 0x1FU;
         const std::int64_t immediate =
             sign_extend((instruction >> 15U) & 0x7FU, 7U);
-        if (vector_pair || (opc != 0U && opc != 1U && opc != 2U) ||
-            (opc == 1U && !load) || mode == 0U) {
+        if (mode == 0U || opc == 3U ||
+            (!vector_pair && opc == 1U && !load)) {
             return StepResult::UnsupportedInstruction;
         }
-        if (load && target_first == target_second) {
+        if (load && target_first == target_second)
             return StepResult::UnsupportedInstruction;
-        }
 
-        const std::size_t element_size = opc == 2U ? 8U : 4U;
+        const std::size_t element_size = vector_pair
+            ? (std::size_t{4U} << opc)
+            : (opc == 2U ? 8U : 4U);
         const std::size_t transfer_size = element_size * 2U;
         const std::int64_t byte_displacement =
             immediate * static_cast<std::int64_t>(element_size);
@@ -926,7 +927,7 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
                 effective_address = base + amount;
             }
             if (mode == 3U) writeback_value = effective_address;
-        } else { // post-index: transfer at the original base, then update it.
+        } else {
             if (byte_displacement < 0) {
                 const std::uint64_t magnitude =
                     static_cast<std::uint64_t>(-byte_displacement);
@@ -941,12 +942,11 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
             }
         }
 
-        if (writeback && base_register != 31U &&
-            (base_register == target_first || base_register == target_second)) {
+        if (!vector_pair && writeback && base_register != 31U &&
+            (base_register == target_first || base_register == target_second))
             return StepResult::UnsupportedInstruction;
-        }
 
-        std::array<std::uint8_t, 16U> bytes{};
+        std::array<std::uint8_t, 32U> bytes{};
         const auto transfer = std::span<std::uint8_t>(
             bytes.data(), transfer_size);
         if (load) {
@@ -955,31 +955,50 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
             for (unsigned index = 0U; index < 2U; ++index) {
                 const std::size_t offset =
                     static_cast<std::size_t>(index) * element_size;
-                std::uint64_t value = 0U;
-                for (std::size_t byte = 0U; byte < element_size; ++byte)
-                    value |= static_cast<std::uint64_t>(bytes[offset + byte]) << (byte * 8U);
                 const unsigned destination =
                     index == 0U ? target_first : target_second;
-                if (opc == 1U) {
+                std::uint64_t low = 0U;
+                for (std::size_t byte = 0U; byte <
+                     std::min<std::size_t>(element_size, 8U); ++byte)
+                    low |= static_cast<std::uint64_t>(bytes[offset + byte]) << (byte * 8U);
+
+                if (vector_pair) {
+                    std::uint64_t high = 0U;
+                    if (element_size == 16U) {
+                        for (std::size_t byte = 0U; byte < 8U; ++byte)
+                            high |= static_cast<std::uint64_t>(
+                                bytes[offset + 8U + byte]) << (byte * 8U);
+                    }
+                    context.v[destination] = {low, high};
+                } else if (opc == 1U) {
                     const auto signed_word = std::bit_cast<std::int32_t>(
-                        static_cast<std::uint32_t>(value));
-                    value = static_cast<std::uint64_t>(
+                        static_cast<std::uint32_t>(low));
+                    low = static_cast<std::uint64_t>(
                         static_cast<std::int64_t>(signed_word));
-                    write_register(context, destination, value, true);
+                    write_register(context, destination, low, true);
                 } else {
-                    write_register(context, destination, value, opc == 2U);
+                    write_register(context, destination, low, opc == 2U);
                 }
             }
         } else {
-            const std::array<unsigned, 2U> sources{target_first, target_second};
             for (unsigned index = 0U; index < 2U; ++index) {
-                const std::uint64_t value =
-                    read_register(context, sources[index]) & width_mask(opc == 2U);
+                const unsigned source =
+                    index == 0U ? target_first : target_second;
                 const std::size_t offset =
                     static_cast<std::size_t>(index) * element_size;
-                for (std::size_t byte = 0U; byte < element_size; ++byte)
-                    bytes[offset + byte] =
-                        static_cast<std::uint8_t>((value >> (byte * 8U)) & 0xFFU);
+                std::uint64_t low = vector_pair
+                    ? context.v[source].low
+                    : (read_register(context, source) & width_mask(opc == 2U));
+                for (std::size_t byte = 0U; byte <
+                     std::min<std::size_t>(element_size, 8U); ++byte)
+                    bytes[offset + byte] = static_cast<std::uint8_t>(
+                        (low >> (byte * 8U)) & 0xFFU);
+                if (vector_pair && element_size == 16U) {
+                    const std::uint64_t high = context.v[source].high;
+                    for (std::size_t byte = 0U; byte < 8U; ++byte)
+                        bytes[offset + 8U + byte] = static_cast<std::uint8_t>(
+                            (high >> (byte * 8U)) & 0xFFU);
+                }
             }
             const auto const_transfer = std::span<const std::uint8_t>(
                 bytes.data(), transfer_size);
@@ -995,7 +1014,6 @@ StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
         ++context.instructions_retired;
         return StepResult::Executed;
     }
-
 
 
     // Register-offset integer loads/stores with UXTW, LSL, SXTW or SXTX.

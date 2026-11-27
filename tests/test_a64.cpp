@@ -907,6 +907,62 @@ int main() {
            exclusive_state.instructions_retired == retired_before_barriers + 3U,
            "barriers retire in order and advance the instruction stream");
 
+    // SIMD/FP register-pair memory operations (S/D/Q forms).
+    constexpr std::uint64_t pair_code = 0x6000U;
+    constexpr std::uint64_t pair_data = 0x6100U;
+    lucid::core::MemoryBus pair_memory;
+    expect(pair_memory.map_region(pair_code, 0x100U),
+           "map vector pair instruction fixture");
+    expect(pair_memory.map_region(pair_data, 0x100U),
+           "map vector pair data fixture");
+    write32(pair_memory, pair_code + 0x00U, 0x2DBF0440U); // STP S0,S1,[X2,#-8]!
+    write32(pair_memory, pair_code + 0x04U, 0x2CC10C42U); // LDP S2,S3,[X2],#8
+    write32(pair_memory, pair_code + 0x08U, 0x6D011444U); // STP D4,D5,[X2,#16]
+    write32(pair_memory, pair_code + 0x0CU, 0xAD7F1C46U); // LDP Q6,Q7,[X2,#-32]
+    lucid::cpu::CpuContext pair_state{};
+    pair_state.program_counter = pair_code;
+    pair_state.x[2] = pair_data + 8U;
+    pair_state.v[0] = {0xAABBCCDDU, 0x1111222233334444ULL};
+    pair_state.v[1] = {0x55667788U, 0x5555666677778888ULL};
+    expect(cpu.step(pair_state, pair_memory) ==
+               lucid::cpu::StepResult::Executed,
+           "execute pre-index SIMD S-register pair store");
+    expect(pair_state.x[2] == pair_data,
+           "SIMD S pair pre-index updates the base register");
+    pair_state.program_counter = pair_code + 4U;
+    expect(cpu.step(pair_state, pair_memory) ==
+               lucid::cpu::StepResult::Executed,
+           "execute post-index SIMD S-register pair load");
+    expect(pair_state.v[2].low == 0xAABBCCDDU && pair_state.v[2].high == 0U &&
+           pair_state.v[3].low == 0x55667788U && pair_state.v[3].high == 0U &&
+           pair_state.x[2] == pair_data + 8U,
+           "SIMD S pair loads zero upper bits and applies post-index writeback");
+
+    pair_state.program_counter = pair_code + 8U;
+    pair_state.x[2] = pair_data;
+    pair_state.v[4] = {0x0123456789ABCDEFULL, 0xFFFFFFFFFFFFFFFFULL};
+    pair_state.v[5] = {0xFEDCBA9876543210ULL, 0xAAAAAAAAAAAAAAAAULL};
+    expect(cpu.step(pair_state, pair_memory) ==
+               lucid::cpu::StepResult::Executed,
+           "execute signed-offset SIMD D-register pair store");
+    std::array<std::uint8_t, 16U> stored_d{};
+    expect(pair_memory.read(pair_data + 16U, stored_d),
+           "read back SIMD D pair store");
+    expect(stored_d[0] == 0xEFU && stored_d[7] == 0x01U &&
+           stored_d[8] == 0x10U && stored_d[15] == 0xFEU,
+           "SIMD D pair stores both 64-bit register payloads");
+
+    pair_state.program_counter = pair_code + 12U;
+    pair_state.x[2] = pair_data + 32U;
+    expect(cpu.step(pair_state, pair_memory) ==
+               lucid::cpu::StepResult::Executed,
+           "execute signed-offset SIMD Q-register pair load");
+    expect(pair_state.v[6].low == 0xAABBCCDDU &&
+           pair_state.v[6].high == 0U &&
+           pair_state.v[7].low == 0x55667788U &&
+           pair_state.v[7].high == 0U,
+           "SIMD Q pair loads all 128 bits from its 32-byte memory range");
+
     if (failures != 0) {
         std::cerr << failures << " A64 test(s) failed.\n";
         return 1;
