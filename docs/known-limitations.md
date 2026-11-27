@@ -201,3 +201,8 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 
 - Runtime supports host-side manual/auto-reset events, counting semaphores and recursive mutex ownership through process-owned handles. Wait probes are nonblocking and use the cooperative wait-key scheduler; they are not a drop-in Horizon WaitSynchronization/ArbitrateLock ABI.
 - Priority inheritance, robust mutex owner death semantics, timeout clocks, wait-all, cancellation races and cross-process handle transfer are not implemented.
+
+
+## Atomic instruction limitations
+
+A64 LSE LDADD/LDCLR/LDEOR/LDSET/LDSMAX/LDSMIN/LDUMAX/LDUMIN/SWP operations are implemented on a synchronized shared backing store for 8/16/32/64-bit operands. The acquire/release variants use that same serialized host model; there are no per-core store buffers, private cache hierarchies, weak-memory reordering, realistic cache maintenance, CAS/CASP, or pair exclusives. The memory bus uses a conservative 16-byte exclusive reservation version granule; this is not a claim about physical console monitor granularity.
