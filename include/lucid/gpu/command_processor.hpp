@@ -41,7 +41,7 @@ public:
     static constexpr std::uint32_t MaxVerticesPerDraw = 65536U;
     static constexpr std::uint32_t MaxIndicesPerDraw = 196608U;
 
-    [[nodiscard]] bool submit(const GuestGpuMemory& memory,
+    [[nodiscard]] bool submit(const GpuMemoryView& memory,
                               std::uint64_t guest_address,
                               std::size_t byte_length,
                               GraphicsBackend& backend,
