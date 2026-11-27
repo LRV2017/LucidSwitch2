@@ -32,8 +32,8 @@ Acquire/release encodings are decoded but share the same serialized host model. 
 
 MemoryBus synchronizes region lookup, mapping, permission checks, data reads/writes, exclusive reservations and LSE read-modify-write operations. The Switch 2 CPU cluster can schedule eight contexts on host workers. The model still lacks private L1/L2 caches, cache maintenance instructions, realistic cache-line ownership, TLB shootdowns and full architectural memory ordering. The 16-byte exclusive reservation granule is a conservative host-model choice, not a statement about Switch/Switch 2 hardware.
 
-CAS and CASAL are now supported for byte/halfword/word/doubleword operands. CASP pair operations, pair-exclusive instructions, pointer authentication and the complete A64 instruction set remain unsupported.
+CAS/CASA/CASL/CASAL are supported for byte/halfword/word/doubleword operands. CASP/CASPA/CASPL/CASPAL support compare-and-swap of two 32-bit words or two 64-bit doublewords as one aligned operation. Pair-exclusive instructions, pointer authentication and the complete A64 instruction set remain unsupported.
 
 ## Tests
 
-A64 fixtures cover LDXR/LDAXR/STXR/STLXR/CLREX, all implemented LSE operation families, 8/16/32/64-bit widths, alignment faults, 2,000 concurrent increments without lost updates, and LSE invalidation of a peer's exclusive reservation.
+A64 fixtures cover LDXR/LDAXR/STXR/STLXR/CLREX, LDADD/LDCLR/LDEOR/LDSET/min/max/SWP, CAS/CASP success and mismatch cases, 8/16/32/64-bit operands, paired 64/128-bit CASP transfers, alignment faults, concurrent increments without lost updates, and invalidation of peer exclusive reservations.
