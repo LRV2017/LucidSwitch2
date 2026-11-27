@@ -14,7 +14,7 @@ An experimental, clean-room emulator research project focused on building a lawf
 
 ## Current foundation
 
-- Switch 2 static homebrew loader: accepts bounded ELF64 little-endian AArch64 `ET_EXEC` segments, validates ranges/alignments/entry point, zero-fills BSS, enforces W^X mappings, and rolls back mappings on load failure. It is not a Nintendo retail package loader.
+- Switch 2 static homebrew loader: accepts bounded ELF64 little-endian AArch64 `ET_EXEC` segments, validates ranges/alignments/entry point, zero-fills BSS, enforces W^X mappings, and rolls back mappings on load failure. `lucidswitch2 --run-switch2-elf <homebrew.elf> [instruction-budget]` runs the image through the cached A64 interpreter with a bounded test stack; it is not a Horizon process launcher or Nintendo retail package loader.
 - Device I/O foundations: a synchronized eight-slot controller snapshot hub and a 16-channel signed-16-bit stereo PCM mixer with Q15 gain and saturation. No native device discovery or console DSP emulation is claimed yet.
 
 - C++20 / CMake project with cross-platform CI for Windows, Linux, and macOS.
@@ -22,7 +22,7 @@ An experimental, clean-room emulator research project focused on building a lawf
 - CPU context with 31 general-purpose registers, 32 modeled 128-bit SIMD/FP registers, SP, PC, retired-instruction count, and NZCV flags.
 - Bounded emulator execution loop with program loading, pause-on-budget, resume, stop, and explicit CPU fault reporting.
 - Initial Advanced SIMD/NEON subset: integer-vector ADD/SUB with B/H/S/D lanes and 64/128-bit arrangements, plus vector AND/ORR/EOR; most vector memory, lane, comparison, permutation, crypto and vector-FP operations remain unsupported. See [docs/advsimd-integer-subset.md](docs/advsimd-integer-subset.md).
-- CPU execution optimization: a generation-aware A64 basic-block cache avoids repeated instruction fetch for unchanged blocks and invalidates cached code after backing-memory writes; execution still uses the interpreter and is not native JIT.
+- CPU execution optimization: a generation-aware A64 basic-block cache avoids repeated instruction fetch for unchanged blocks and invalidates cached code after backing-memory writes; execution still uses the interpreter and is not native JIT. See [docs/a64-block-cache.md](docs/a64-block-cache.md) and [docs/switch2-elf-homebrew.md](docs/switch2-elf-homebrew.md).
 - Expanded but incomplete A64 interpreter: MOVN/MOVZ/MOVK, ADR/ADRP, logical immediates, conditional selects, ADC/ADCS, SBC/SBCS, UDIV/SDIV, variable shifts, MADD/MSUB, linked branches, PC-relative literal loads, scalar S/D FMOV and FADD/FSUB/FMUL/FDIV, NZCV updates, common branches, unsigned-offset, unscaled/pre/post-index and register-offset scalar LDR/STR, signed loads, integer pair LDP/STP, and selected MRS/MSR system-register accesses.
 - Translation-aware CPU memory facade: instruction fetches and data accesses pass through the stage-1 walker and TLB; emulator sessions build a synthetic identity map using L1 1 GiB block descriptors.
 - Limited ARM stage-1 support: 4 KiB granule, 48-bit lower VA / 48-bit PA, TTBR0_EL1, L0-L3 walks, L1/L2 blocks, L3 pages, access-flag and EL1 permission checks, and explicit TLB invalidation.

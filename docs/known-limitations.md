@@ -188,3 +188,10 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 - `A64BlockCache` caches short basic blocks of instruction words for direct/identity-mapped guest memory and reuses them through the existing interpreter.
 - Memory mappings carry generation identifiers. Guest writes and permission changes advance a region generation; cached blocks from stale generations are discarded before reuse. Self-modifying code is detected at instruction boundaries.
 - The current cache is not a native JIT: it does not emit host machine code, perform register allocation, specialize instructions, or support translated virtual-address cache tagging. It is an optimization and invalidation foundation for a later recompiler.
+
+
+## Standalone Switch 2 ELF test runner
+
+- `--run-switch2-elf` loads only bounded static ELF64 little-endian AArch64 `ET_EXEC` homebrew segments and runs them with the cached A64 interpreter and a generic test stack.
+- It does not create Horizon process metadata, TLS, IPC command buffers, application launch arguments, system-service sessions, or a guest GPU context. The CPU starts from the supplied ELF entry point and is instruction-budgeted.
+- The command is a loader/execution test harness. A program reaching its instruction budget is not evidence that it is a Switch 2 game or Horizon application.
