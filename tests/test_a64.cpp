@@ -7,6 +7,8 @@
 #include <bit>
 #include <cstdint>
 #include <iostream>
+#include <atomic>
+#include <thread>
 
 namespace {
 int failures = 0;
@@ -1020,6 +1022,165 @@ int main() {
            "execute STLR X followed by LDAR X");
     expect(pair_state.x[4] == 0x1122334455667788ULL,
            "LDAR X observes the preceding release store");
+
+    // FEAT_LSE atomic instructions, with encodings checked by an AArch64 assembler.
+    write32(pair_memory,pair_code+0x38U,0x38200041U); // LDADDB W0,W1,[X2]
+    write32(pair_memory,pair_code+0x3CU,0x78A300A4U); // LDADDAH W3,W4,[X5]
+    write32(pair_memory,pair_code+0x40U,0xB8260107U); // LDADD W6,W7,[X8]
+    write32(pair_memory,pair_code+0x44U,0xF8E9016AU); // LDADDAL X9,X10,[X11]
+    write32(pair_memory,pair_code+0x48U,0x382C11CDU); // LDCLRB W12,W13,[X14]
+    write32(pair_memory,pair_code+0x4CU,0x782F2230U); // LDEORH W15,W16,[X17]
+    write32(pair_memory,pair_code+0x50U,0xF8323293U); // LDSET X18,X19,[X20]
+    write32(pair_memory,pair_code+0x54U,0xF83582F6U); // SWP X21,X22,[X23]
+    write32(pair_memory,pair_code+0x58U,0xB8204041U); // LDSMAX W0,W1,[X2]
+    write32(pair_memory,pair_code+0x5CU,0xF82350A4U); // LDSMIN X3,X4,[X5]
+    write32(pair_memory,pair_code+0x60U,0xB8266107U); // LDUMAX W6,W7,[X8]
+    write32(pair_memory,pair_code+0x64U,0xF829716AU); // LDUMIN X9,X10,[X11]
+
+    auto write_atomic_value=[&](const std::uint64_t address,const std::size_t size,
+                                const std::uint64_t value){
+        std::array<std::uint8_t,8U> bytes{};
+        for(std::size_t byte=0U;byte<size;++byte)
+            bytes[byte]=static_cast<std::uint8_t>((value>>(byte*8U))&0xFFU);
+        expect(pair_memory.write(address,
+            std::span<const std::uint8_t>(bytes.data(),size)),
+            "initialize LSE atomic memory operand");
+    };
+    auto read_atomic_value=[&](const std::uint64_t address,const std::size_t size){
+        std::array<std::uint8_t,8U> bytes{};
+        expect(pair_memory.read(address,
+            std::span<std::uint8_t>(bytes.data(),size)),
+            "read LSE atomic memory result");
+        std::uint64_t value=0U;
+        for(std::size_t byte=0U;byte<size;++byte)
+            value|=static_cast<std::uint64_t>(bytes[byte])<<(byte*8U);
+        return value;
+    };
+    const std::uint64_t lse_data=pair_data+0x80U;
+    pair_state=lucid::cpu::CpuContext{};
+    write_atomic_value(lse_data,1U,0x10U);
+    pair_state.x[0]=5U;pair_state.x[2]=lse_data;
+    pair_state.program_counter=pair_code+0x38U;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[1]==0x10U&&read_atomic_value(lse_data,1U)==0x15U,
+        "LDADDB returns the old byte and stores the wrapping sum");
+
+    write_atomic_value(lse_data+2U,2U,0x1000U);
+    pair_state.x[3]=0x30U;pair_state.x[5]=lse_data+2U;
+    pair_state.program_counter=pair_code+0x3CU;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[4]==0x1000U&&read_atomic_value(lse_data+2U,2U)==0x1030U,
+        "LDADDAH atomically adds a halfword and returns the prior value");
+
+    write_atomic_value(lse_data+4U,4U,0xFFFFFFFEU);
+    pair_state.x[6]=5U;pair_state.x[8]=lse_data+4U;
+    pair_state.program_counter=pair_code+0x40U;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[7]==0xFFFFFFFEU&&read_atomic_value(lse_data+4U,4U)==3U,
+        "LDADD wraps a 32-bit word result");
+
+    write_atomic_value(lse_data+8U,8U,100U);
+    pair_state.x[9]=3U;pair_state.x[11]=lse_data+8U;
+    pair_state.program_counter=pair_code+0x44U;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[10]==100U&&read_atomic_value(lse_data+8U,8U)==103U,
+        "LDADDAL atomically adds a doubleword");
+
+    write_atomic_value(lse_data+16U,1U,0xFFU);
+    pair_state.x[12]=0x0FU;pair_state.x[14]=lse_data+16U;
+    pair_state.program_counter=pair_code+0x48U;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[13]==0xFFU&&read_atomic_value(lse_data+16U,1U)==0xF0U,
+        "LDCLRB clears selected bits atomically");
+
+    write_atomic_value(lse_data+18U,2U,0xAAAAU);
+    pair_state.x[15]=0x00FFU;pair_state.x[17]=lse_data+18U;
+    pair_state.program_counter=pair_code+0x4CU;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[16]==0xAAAAU&&read_atomic_value(lse_data+18U,2U)==0xAA55U,
+        "LDEORH atomically XORs a halfword");
+
+    write_atomic_value(lse_data+24U,8U,0x1000U);
+    pair_state.x[18]=0x0FU;pair_state.x[20]=lse_data+24U;
+    pair_state.program_counter=pair_code+0x50U;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[19]==0x1000U&&read_atomic_value(lse_data+24U,8U)==0x100FU,
+        "LDSET atomically ORs a doubleword");
+
+    write_atomic_value(lse_data+32U,8U,0x3333U);
+    pair_state.x[21]=0x4444U;pair_state.x[23]=lse_data+32U;
+    pair_state.program_counter=pair_code+0x54U;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[22]==0x3333U&&read_atomic_value(lse_data+32U,8U)==0x4444U,
+        "SWP exchanges a register and doubleword atomically");
+
+    write_atomic_value(lse_data+40U,4U,0xFFFFFFFBU);
+    pair_state.x[0]=3U;pair_state.x[2]=lse_data+40U;
+    pair_state.program_counter=pair_code+0x58U;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[1]==0xFFFFFFFBU&&read_atomic_value(lse_data+40U,4U)==3U,
+        "LDSMAX compares signed 32-bit values");
+
+    write_atomic_value(lse_data+48U,8U,5U);
+    pair_state.x[3]=0xFFFFFFFFFFFFFFFEULL;pair_state.x[5]=lse_data+48U;
+    pair_state.program_counter=pair_code+0x5CU;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[4]==5U&&read_atomic_value(lse_data+48U,8U)==0xFFFFFFFFFFFFFFFEULL,
+        "LDSMIN compares signed 64-bit values");
+
+    write_atomic_value(lse_data+56U,4U,0x1000U);
+    pair_state.x[6]=0x2000U;pair_state.x[8]=lse_data+56U;
+    pair_state.program_counter=pair_code+0x60U;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[7]==0x1000U&&read_atomic_value(lse_data+56U,4U)==0x2000U,
+        "LDUMAX compares unsigned 32-bit values");
+
+    write_atomic_value(lse_data+64U,8U,0x100U);
+    pair_state.x[9]=5U;pair_state.x[11]=lse_data+64U;
+    pair_state.program_counter=pair_code+0x64U;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::Executed&&
+           pair_state.x[10]==0x100U&&read_atomic_value(lse_data+64U,8U)==5U,
+        "LDUMIN compares unsigned 64-bit values");
+
+    pair_state.program_counter=pair_code+0x44U;
+    pair_state.x[11]=lse_data+9U;
+    const auto misaligned_before=pair_state;
+    expect(cpu.step(pair_state,pair_memory)==lucid::cpu::StepResult::MemoryFault&&
+           pair_state.program_counter==misaligned_before.program_counter&&
+           pair_state.x==misaligned_before.x,
+        "reject misaligned LSE atomic operands without changing CPU state");
+
+    const std::uint64_t counter_address=pair_data+0xF0U;
+    write_atomic_value(counter_address,8U,0U);
+    std::atomic<bool> workers_ok{true};
+    std::array<std::thread,8U> atomic_workers{};
+    for(auto& worker:atomic_workers){
+        worker=std::thread([&]{
+            for(unsigned iteration=0U;iteration<250U;++iteration){
+                std::uint64_t previous=0U;
+                if(!pair_memory.atomic_rmw(counter_address,8U,1U,
+                    lucid::core::AtomicOperation::Add,previous))
+                    workers_ok.store(false,std::memory_order_relaxed);
+            }
+        });
+    }
+    for(auto& worker:atomic_workers)worker.join();
+    expect(workers_ok.load(std::memory_order_relaxed)&&
+           read_atomic_value(counter_address,8U)==2000U,
+        "serialize 2,000 concurrent atomic increments without lost updates");
+
+    std::uint64_t reservation=0U;
+    std::array<std::uint8_t,8U> reservation_bytes{};
+    expect(pair_memory.read_exclusive(counter_address,reservation_bytes,reservation),
+        "capture reservation version before an LSE atomic update");
+    std::uint64_t old_counter=0U;
+    expect(pair_memory.atomic_rmw(counter_address,8U,1U,
+        lucid::core::AtomicOperation::Add,old_counter),
+        "perform LSE atomic update against a reserved granule");
+    bool exclusive_stored=true;
+    expect(pair_memory.write_exclusive(counter_address,reservation_bytes,
+        reservation,exclusive_stored)&&!exclusive_stored,
+        "LSE atomic update invalidates a peer's exclusive reservation");
 
     if (failures != 0) {
         std::cerr << failures << " A64 test(s) failed.\n";

@@ -362,6 +362,48 @@ StepResult A64Interpreter::step_decoded(CpuContext& context, CpuMemory& memory,
     }
 
 
+    // AArch64 FEAT_LSE atomic memory operations. One MemoryBus lock spans
+    // the complete read/modify/write and updates exclusive-monitor versions.
+    if ((instruction & 0x3F200C00U) == 0x38200000U) {
+        const unsigned size_encoding=(instruction>>30U)&0x3U;
+        const std::size_t transfer_size=std::size_t{1U}<<size_encoding;
+        const bool acquire=((instruction>>23U)&1U)!=0U;
+        const bool release=((instruction>>22U)&1U)!=0U;
+        const unsigned source_register=(instruction>>16U)&0x1FU;
+        const unsigned operation_field=(instruction>>12U)&0x7U;
+        const bool swap=((instruction>>15U)&1U)!=0U;
+        const unsigned base_register=(instruction>>5U)&0x1FU;
+        const unsigned target_register=instruction&0x1FU;
+        (void)acquire;
+        (void)release;
+        core::AtomicOperation operation{};
+        if(swap){
+            if(operation_field!=0U)return StepResult::UnsupportedInstruction;
+            operation=core::AtomicOperation::Swap;
+        }else{
+            switch(operation_field){
+            case 0U:operation=core::AtomicOperation::Add;break;
+            case 1U:operation=core::AtomicOperation::Clear;break;
+            case 2U:operation=core::AtomicOperation::Eor;break;
+            case 3U:operation=core::AtomicOperation::Set;break;
+            case 4U:operation=core::AtomicOperation::SignedMax;break;
+            case 5U:operation=core::AtomicOperation::SignedMin;break;
+            case 6U:operation=core::AtomicOperation::UnsignedMax;break;
+            case 7U:operation=core::AtomicOperation::UnsignedMin;break;
+            }
+        }
+        const std::uint64_t address=read_base_register(context,base_register);
+        if((address%transfer_size)!=0U)return StepResult::MemoryFault;
+        const std::uint64_t operand=read_register(context,source_register);
+        std::uint64_t previous=0U;
+        if(!memory.atomic_rmw(address,transfer_size,operand,operation,previous))
+            return StepResult::MemoryFault;
+        write_register(context,target_register,previous,size_encoding==3U);
+        context.program_counter=next_pc;
+        ++context.instructions_retired;
+        return StepResult::Executed;
+    }
+
     // Initial Advanced SIMD integer operations. This bounded subset supports
     // vector ADD/SUB for B/H/S/D lanes and vector AND/ORR/EOR at 64/128 bits.
     if ((instruction & 0xBF20FC00U) == 0x0E208400U ||

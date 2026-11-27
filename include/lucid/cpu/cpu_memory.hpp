@@ -24,6 +24,9 @@ public:
                                         std::span<std::uint8_t> output) const;
     [[nodiscard]] bool write(std::uint64_t address,
                              std::span<const std::uint8_t> input);
+    [[nodiscard]] bool atomic_rmw(std::uint64_t address, std::size_t size,
+        std::uint64_t operand, core::AtomicOperation operation,
+        std::uint64_t& previous_value);
     [[nodiscard]] bool read_exclusive(std::uint64_t address,
         std::span<std::uint8_t> output, std::uint64_t& physical_address,
         std::uint64_t& version) const;
