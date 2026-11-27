@@ -125,7 +125,8 @@ void test_parallel_execution_and_shared_memory() {
     const auto report = cluster.run_parallel(memory, 3U);
     expect(report.instructions_executed == switch2::CpuCluster::CoreCount * 3U,
            "execute a bounded budget concurrently on all eight cores");
-    expect(report.runnable_cores == 0U && report.faulted_cores == 0U,
+    expect(report.runnable_cores == switch2::CpuCluster::CoreCount &&
+           report.faulted_cores == 0U,
            "parallel workers finish without guest faults");
     for (std::size_t core = 0U; core < switch2::CpuCluster::CoreCount; ++core) {
         const auto* context = cluster.context(core);
