@@ -1,4 +1,6 @@
 #include "lucid/core/emulator.hpp"
+#include "lucid/cpu/block_cache.hpp"
+#include "lucid/core/memory_bus.hpp"
 #include "lucid/gpu/vulkan_backend.hpp"
 #include "lucid/gpu/software_backend.hpp"
 #include "lucid/gpu/window_presenter.hpp"
@@ -8,6 +10,7 @@
 #include "lucid/switch/homebrew_loader.hpp"
 #include "lucid/switch/nsp_package.hpp"
 #include "lucid/switch2/cpu_cluster.hpp"
+#include "lucid/switch2/homebrew_elf_loader.hpp"
 
 #include <algorithm>
 #include <array>
@@ -15,6 +18,7 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -498,6 +502,82 @@ int run_nro_homebrew(const std::filesystem::path& path,
     return 0;
 }
 
+int run_switch2_elf_homebrew(const std::filesystem::path& path,
+                               const std::uint64_t instruction_budget) {
+    constexpr std::uint64_t kMaximumElfFileBytes =
+        lucid::switch2::HomebrewElfLoader::MaxImageMemoryBytes;
+    std::ifstream input(path, std::ios::binary | std::ios::ate);
+    if (!input) {
+        std::cerr << "Could not open the standalone AArch64 ELF image.\\n";
+        return 1;
+    }
+    const auto end = input.tellg();
+    if (end <= std::streampos(0)) {
+        std::cerr << "The ELF image is empty or its size could not be read.\\n";
+        return 1;
+    }
+    const auto length = static_cast<std::uint64_t>(
+        static_cast<std::streamoff>(end));
+    if (length > kMaximumElfFileBytes ||
+        length > static_cast<std::uint64_t>(std::numeric_limits<std::size_t>::max())) {
+        std::cerr << "The ELF image exceeds the configured file-size limit.\\n";
+        return 1;
+    }
+    std::vector<std::uint8_t> image(static_cast<std::size_t>(length));
+    input.seekg(0, std::ios::beg);
+    input.read(reinterpret_cast<char*>(image.data()),
+               static_cast<std::streamsize>(image.size()));
+    if (!input || input.gcount() != static_cast<std::streamsize>(image.size())) {
+        std::cerr << "Could not read the complete ELF image.\\n";
+        return 1;
+    }
+
+    lucid::core::MemoryBus memory;
+    lucid::switch2::HomebrewElfLoader loader;
+    lucid::switch2::HomebrewElfLoadInfo load_info{};
+    std::string error;
+    if (!loader.load(image, memory, load_info, &error)) {
+        std::cerr << "Switch 2 static ELF homebrew loader rejected the image: "
+                  << error << "\\n";
+        return 1;
+    }
+
+    // Provide a bounded generic test stack. This is not a Horizon TLS block,
+    // process launch context, or an application ABI implementation.
+    constexpr std::uint64_t stack_base = 0x0000F00000000000ULL;
+    constexpr std::size_t stack_size = 1024U * 1024U;
+    if (!memory.map_region(stack_base, stack_size, &error,
+                           lucid::core::MemoryPermission::ReadWrite)) {
+        std::cerr << "Could not allocate the standalone ELF test stack: "
+                  << error << "\\n";
+        return 1;
+    }
+
+    lucid::cpu::CpuContext context{};
+    context.program_counter = load_info.entry_point;
+    context.sp = stack_base + stack_size;
+    lucid::cpu::A64BlockCache cache;
+    const auto run = cache.run(context, memory, instruction_budget);
+
+    std::cout << "Switch 2-target static AArch64 ELF homebrew test runner\\n"
+              << "Entry point: 0x" << std::hex << load_info.entry_point << "\\n"
+              << "Loaded segments: " << std::dec << load_info.loaded_segments << "\\n"
+              << "Mapped image memory: " << load_info.total_memory_bytes << " bytes\\n"
+              << "Instructions retired: " << run.instructions_executed << "\\n"
+              << "Final PC: 0x" << std::hex << context.program_counter << std::dec << "\\n"
+              << "Cached blocks compiled: " << cache.stats().blocks_compiled << "\\n"
+              << "Cache hits: " << cache.stats().cache_hits << "\\n"
+              << "Stop reason: " << lucid::cpu::to_string(run.stop_reason) << "\\n"
+              << "Runner: cached A64 interpreter; no native JIT or Horizon OS.\\n"
+              << "GPU: no guest Ampere emulation; this test runner is CPU-only.\\n";
+    if (!run.instruction_budget_exhausted) {
+        std::cerr << "The ELF program stopped before its instruction budget.\\n";
+        return 1;
+    }
+    std::cout << "[PASS] static ELF homebrew image reached the bounded instruction budget.\\n";
+    return 0;
+}
+
 int run_compatibility_report(const std::string_view target) {
     using lucid::switchfmt::HardwareTarget;
     if (target == "switch" || target == "all") {
@@ -656,6 +736,19 @@ int main(int argc, char* argv[]) {
             return 2;
         }
         return run_compatibility_report(argv[2]);
+    }
+    if (command == "--run-switch2-elf") {
+        if (argc != 3 && argc != 4) {
+            std::cerr << "Usage: --run-switch2-elf <homebrew.elf> [instruction-budget]\\n";
+            return 2;
+        }
+        std::uint64_t budget = kDefaultHomebrewBudget;
+        if (argc == 4 && !parse_instruction_budget(argv[3], budget)) {
+            std::cerr << "Instruction budget must be between 1 and "
+                      << kMaximumHomebrewBudget << ".\\n";
+            return 2;
+        }
+        return run_switch2_elf_homebrew(argv[2], budget);
     }
     if (command == "--run-nro") {
         if (argc < 3 || argc > 4) {
