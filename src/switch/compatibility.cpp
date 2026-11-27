@@ -36,7 +36,7 @@ constexpr std::array<CompatibilityFeature, 14U> kCommonFeatures{{
     {"CPU", "Scalar S/D floating-point and FMOV", ImplementationStatus::Partial,
      "Scalar single/double arithmetic and bit-preserving FMOV are modeled; FPCR/FPSR, traps, and full precision control are not."},
     {"CPU", "Advanced SIMD/NEON vector execution", ImplementationStatus::Partial,
-     "Integer-vector ADD/SUB and 64/128-bit AND/ORR/EOR are implemented for selected arrangements. Vector memory, lane operations, most arithmetic, vector FP, and crypto remain unsupported."},
+     "Integer-vector ADD/SUB and 64/128-bit AND/ORR/EOR are implemented for selected arrangements. S/D/Q SIMD/FP register-pair LDP/STP and unsigned-offset S/D/Q LDR/STR are also covered. Structure/lane operations, most vector arithmetic, vector FP, and crypto remain unsupported."},
     {"CPU", "Atomics, exclusives, and pointer authentication", ImplementationStatus::Partial,
      "Aligned 32/64-bit LDXR/LDAXR/STXR/STLXR and CLREX use a shared 16-byte-granule reservation-version model for sequential guest-core execution. LSE atomics, byte/halfword and pair exclusives, pointer authentication, cache coherency, and true host-thread SMP remain unsupported."},
     {"System", "General Horizon process loader and runtime", ImplementationStatus::NotImplemented,
