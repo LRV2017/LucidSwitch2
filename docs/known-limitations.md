@@ -173,3 +173,11 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 
 - LDAR and STLR support aligned 32-bit and 64-bit general-register transfers.
 - Acquire/release sequencing is represented by synchronous instruction ordering only. There are no host-thread fences or weak-memory visibility rules until a true concurrent guest CPU scheduler is introduced.
+
+
+## Parallel CPU execution and shared memory
+
+- The Switch 2 CPU-cluster experiment now offers a parallel host-worker mode with one worker per core and a bounded per-core instruction budget.
+- The shared MemoryBus synchronizes mappings, reads, writes, and exclusive reservations; normal stores update reservation versions under the same lock as the byte write.
+- This is coherent shared backing memory, not a model of private CPU caches or the complete AArch64 weak-memory model. DMB/DSB/ISB and acquire/release instructions remain sequential approximations.
+- Native JIT, code-cache invalidation, cache-maintenance behavior, TLB shootdowns and hardware-faithful SMP remain unimplemented.

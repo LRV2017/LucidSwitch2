@@ -38,7 +38,7 @@ constexpr std::array<CompatibilityFeature, 14U> kCommonFeatures{{
     {"CPU", "Advanced SIMD/NEON vector execution", ImplementationStatus::Partial,
      "Integer-vector ADD/SUB and 64/128-bit AND/ORR/EOR are implemented for selected arrangements. S/D/Q SIMD/FP register-pair LDP/STP and unsigned-offset S/D/Q LDR/STR are also covered. Structure/lane operations, most vector arithmetic, vector FP, and crypto remain unsupported."},
     {"CPU", "Atomics, exclusives, and pointer authentication", ImplementationStatus::Partial,
-     "Aligned 32/64-bit LDXR/LDAXR/STXR/STLXR and CLREX use a shared 16-byte-granule reservation-version model for sequential guest-core execution. LSE atomics, byte/halfword and pair exclusives, pointer authentication, cache coherency, and true host-thread SMP remain unsupported."},
+     "Aligned 32/64-bit LDXR/LDAXR/STXR/STLXR and CLREX use a shared 16-byte-granule reservation-version model. The memory bus is host-thread synchronized and the cluster can run cores on worker threads. LSE atomics, byte/halfword and pair exclusives, pointer authentication, private CPU caches, and hardware-faithful memory ordering remain unsupported."},
     {"System", "General Horizon process loader and runtime", ImplementationStatus::NotImplemented,
      "The restricted NRO test loader is not a process manager and does not support general MOD0 relocation, NSO loading, launch arguments, or Horizon process state."},
     {"Memory", "Stage-1 address translation", ImplementationStatus::Partial,
@@ -70,7 +70,7 @@ constexpr CompatibilityFeature kOriginalExecutableFeature{
 constexpr CompatibilityFeature kSwitch2CpuClusterFeature{
     "CPU", "Eight-core Switch 2 CPU-context cluster",
     ImplementationStatus::Partial,
-    "Eight independent A64 architectural contexts share guest memory and are stepped one instruction at a time in deterministic round-robin order. This is not parallel execution, a Horizon scheduler, or a complete Cortex-A78C implementation."
+    "Eight independent A64 architectural contexts share synchronized guest memory. Deterministic round-robin and parallel host-worker runners are available; this is not a Horizon scheduler, a full ARM memory model, or a complete Cortex-A78C implementation."
 };
 
 constexpr CompatibilityFeature kSwitch2ExecutableFeature{

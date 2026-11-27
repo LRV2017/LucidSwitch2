@@ -1,27 +1,27 @@
-# Switch 2 CPU cluster foundation
+# Switch 2 CPU Cluster Foundation
 
-## What is implemented
+LucidSwitch2 models an eight-context CPU topology for independent AArch64 execution experiments. This is a generic, testable CPU cluster model; it is not a complete Cortex-A78C implementation.
 
-The Switch 2 target now has a bounded CPU-cluster abstraction with eight independent AArch64 architectural contexts. Each context keeps its own 31 general-purpose registers, 32 modeled SIMD/FP registers, stack pointer, program counter, condition flags, system-register bank, and retired-instruction count.
+## Execution modes
 
-All eight contexts can share the same checked guest memory bus. Secondary cores begin parked and must be explicitly started with an aligned entry point. \`run_round_robin\` gives one instruction attempt to each runnable core in turn. An unsupported instruction or memory fault marks only that core faulted; the remaining runnable cores continue.
+- `run_round_robin`: deterministic, one-instruction quanta in round-robin order for reproducible tests.
+- `run_parallel`: launches one host worker per core that is runnable when the call begins. Each worker gets a bounded per-core instruction budget. Execution interleaving is nondeterministic.
+- Each core has independent general-purpose/SIMD registers, PC, SP, NZCV flags, system-register state, instruction count and exclusive reservation state.
+- Guest cores share one checked `MemoryBus`. Mapping and data operations are protected with shared/exclusive host locks. Writes update exclusive-reservation versions atomically with respect to other bus operations.
+- A faulting core transitions to `Faulted` without automatically stopping its peers.
 
-The smoke-test command is:
+## Coherency boundary
 
-\`\`\`powershell
-.\build\Release\lucidswitch2.exe --switch2-cpu-demo
-\`\`\`
+The memory bus provides a single coherent shared backing store: a completed bus write is visible to later reads, and a write to a reserved granule invalidates a peer's exclusive-store attempt. `LDXR`/`LDAXR` and `STXR`/`STLXR` remain limited to aligned 32/64-bit operations with a conservative 16-byte reservation-version scheme. `DMB`, `DSB`, `ISB`, `LDAR`, and `STLR` are represented as sequential ordering points in the interpreter.
 
-It runs a synthetic two-instruction program on each context and verifies independent register state and deterministic scheduling. It does not load game files.
+This is not a cache hierarchy or a full ARM memory model. There are no per-core data/instruction caches, speculative execution, store buffers, cache clean/invalidate operations, TLB shootdowns, or true weak-memory reordering. The bus locks serialize individual memory operations; they do not model real console cache-coherency hardware. The interpreter's acquire/release/barrier semantics are therefore not claimed to be complete under SMP.
 
-## What is not implemented
+## Scope still missing
 
-This is not a complete Cortex-A78C CPU core. All contexts use the existing incomplete A64 interpreter. The experiment does not provide native host-thread execution, real simultaneous execution, cache coherency, general memory barriers, per-core TLBs/MMUs, interrupt routing, core affinity, power/frequency states, or the full Switch 2 exception and system-register architecture. The shared MemoryBus now provides a conservative 16-byte-granule exclusive-reservation version model for sequential round-robin execution, but this is not host-thread-safe SMP.
+- Full Cortex-A78C instruction set and architectural feature discovery.
+- Native JIT translation and code-cache invalidation.
+- Accurate cache topology, cache-maintenance operations and architectural memory ordering.
+- Realistic interrupt routing, affinity, timers, power states and Horizon scheduler integration.
+- Separate process address spaces and per-core translation state.
 
-It is not integrated with the single-context \`core::Emulator\`, guest process runtime, or Horizon OS scheduler. The existing SVC dispatcher still reports virtual processor zero in its single-core execution path.
-
-Most importantly, this work does not implement Switch 2 package loading, application startup, Horizon services, the Ampere GPU, shader translation, audio, input, display, or protected-content handling. No Switch 2 game is currently runnable or claimed compatible.
-
-## Why this is a first step
-
-Public community hardware research identifies the Switch 2 T239 as an eight-core Cortex-A78C system. Separate architectural contexts and shared guest memory are prerequisites for later multi-core execution, but they are only a small part of an emulator. Real game compatibility also requires a complete CPU instruction and memory-ordering model, a target loader, OS services, and an independent Ampere GPU implementation.
+Use `--switch2-cpu-demo` to run the deterministic eight-core smoke test. Unit tests exercise both deterministic and parallel worker execution using synthetic instruction streams and shared test memory. No firmware, protected title data, or commercial game files are used.
