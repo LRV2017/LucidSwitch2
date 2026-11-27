@@ -30,6 +30,11 @@ public:
     [[nodiscard]] bool atomic_compare_exchange(std::uint64_t address,
         std::size_t size, std::uint64_t expected, std::uint64_t desired,
         std::uint64_t& previous_value, bool& exchanged);
+    [[nodiscard]] bool atomic_compare_exchange_pair(std::uint64_t address,
+        std::size_t element_size, std::uint64_t expected_low,
+        std::uint64_t expected_high, std::uint64_t desired_low,
+        std::uint64_t desired_high, std::uint64_t& previous_low,
+        std::uint64_t& previous_high, bool& exchanged);
     [[nodiscard]] bool read_exclusive(std::uint64_t address,
         std::span<std::uint8_t> output, std::uint64_t& physical_address,
         std::uint64_t& version) const;
@@ -42,7 +47,7 @@ private:
     [[nodiscard]] bool translate_and_validate(
         std::uint64_t address, std::size_t size, mmu::AccessType access,
         core::MemoryPermission physical_permission,
-        std::array<std::uint64_t, 8>& physical_addresses) const;
+        std::array<std::uint64_t, 16>& physical_addresses) const;
 
     core::MemoryBus& physical_memory_;
     const mmu::AddressSpace* address_space_;

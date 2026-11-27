@@ -305,6 +305,64 @@ bool MemoryBus::atomic_compare_exchange(const std::uint64_t address,
     return true;
 }
 
+bool MemoryBus::atomic_compare_exchange_pair(
+    const std::uint64_t address,const std::size_t element_size,
+    const std::uint64_t expected_low,const std::uint64_t expected_high,
+    const std::uint64_t desired_low,const std::uint64_t desired_high,
+    std::uint64_t& previous_low,std::uint64_t& previous_high,
+    bool& exchanged,std::string* error){
+    previous_low=0U;
+    previous_high=0U;
+    exchanged=false;
+    if((element_size!=4U&&element_size!=8U)||(address%(element_size*2U))!=0U){
+        set_error(error,"Paired compare-and-swap requires an aligned pair of 32-bit or 64-bit operands.");
+        return false;
+    }
+    const std::size_t total_size=element_size*2U;
+    std::unique_lock lock(mutex_);
+    Region* region=find_region(address);
+    if(region==nullptr||
+       !has_permission(region->permissions,MemoryPermission::Read)||
+       !has_permission(region->permissions,MemoryPermission::Write)){
+        set_error(error,"The paired compare-and-swap address is unmapped or lacks read/write permission.");
+        return false;
+    }
+    const std::size_t offset=static_cast<std::size_t>(address-region->base);
+    if(offset>region->bytes.size()||total_size>region->bytes.size()-offset){
+        set_error(error,"The paired compare-and-swap operand crosses a mapped-region boundary.");
+        return false;
+    }
+    const auto read_word=[&](const std::size_t start){
+        std::uint64_t value=0U;
+        for(std::size_t byte=0U;byte<element_size;++byte)
+            value|=static_cast<std::uint64_t>(region->bytes[offset+start+byte])<<(byte*8U);
+        return value;
+    };
+    const std::uint64_t mask=element_size==8U
+        ? std::numeric_limits<std::uint64_t>::max()
+        : 0xFFFFFFFFULL;
+    previous_low=read_word(0U)&mask;
+    previous_high=read_word(element_size)&mask;
+    if(previous_low!=(expected_low&mask)||previous_high!=(expected_high&mask))
+        return true;
+    const auto write_word=[&](const std::size_t start,const std::uint64_t value){
+        for(std::size_t byte=0U;byte<element_size;++byte)
+            region->bytes[offset+start+byte]=static_cast<std::uint8_t>(
+                (value>>(byte*8U))&0xFFU);
+    };
+    write_word(0U,desired_low&mask);
+    write_word(element_size,desired_high&mask);
+    const std::size_t first_granule=offset/ExclusiveGranuleBytes;
+    const std::size_t last_granule=(offset+total_size-1U)/ExclusiveGranuleBytes;
+    for(std::size_t index=first_granule;index<=last_granule;++index){
+        ++region->exclusive_versions[index];
+        if(region->exclusive_versions[index]==0U)++region->exclusive_versions[index];
+    }
+    bump_generation(*region);
+    exchanged=true;
+    return true;
+}
+
 bool MemoryBus::read_exclusive(const std::uint64_t address,
     const std::span<std::uint8_t> output, std::uint64_t& version,
     std::string* error) const {

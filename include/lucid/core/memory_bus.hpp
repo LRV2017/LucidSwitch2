@@ -43,6 +43,12 @@ public:
         std::size_t size, std::uint64_t expected, std::uint64_t desired,
         std::uint64_t& previous_value, bool& exchanged,
         std::string* error = nullptr);
+    [[nodiscard]] bool atomic_compare_exchange_pair(std::uint64_t address,
+        std::size_t element_size, std::uint64_t expected_low,
+        std::uint64_t expected_high, std::uint64_t desired_low,
+        std::uint64_t desired_high, std::uint64_t& previous_low,
+        std::uint64_t& previous_high, bool& exchanged,
+        std::string* error = nullptr);
 
     // Exclusive accesses use a documented 16-byte reservation granule.
     // Mapping, data, and reservation operations are synchronized for

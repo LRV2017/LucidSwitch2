@@ -45,7 +45,7 @@ bool CpuMemory::read(const std::uint64_t address,
                      const std::span<std::uint8_t> output) const {
     if (address_space_ == nullptr && stage1_mmu_ == nullptr)
         return physical_memory_.read(address, output);
-    std::array<std::uint64_t, 8> physical_addresses{};
+    std::array<std::uint64_t, 16> physical_addresses{};
     if (!translate_and_validate(address, output.size(), mmu::AccessType::Read,
                                 core::MemoryPermission::Read,
                                 physical_addresses)) {
@@ -137,6 +137,31 @@ bool CpuMemory::atomic_compare_exchange(const std::uint64_t address,
     }
     return physical_memory_.atomic_compare_exchange(read_addresses[0],size,
         expected,desired,previous_value,exchanged);
+}
+
+bool CpuMemory::atomic_compare_exchange_pair(const std::uint64_t address,
+    const std::size_t element_size,const std::uint64_t expected_low,
+    const std::uint64_t expected_high,const std::uint64_t desired_low,
+    const std::uint64_t desired_high,std::uint64_t& previous_low,
+    std::uint64_t& previous_high,bool& exchanged){
+    const std::size_t total_size=element_size*2U;
+    if(address_space_==nullptr&&stage1_mmu_==nullptr)
+        return physical_memory_.atomic_compare_exchange_pair(address,element_size,
+            expected_low,expected_high,desired_low,desired_high,
+            previous_low,previous_high,exchanged);
+    std::array<std::uint64_t,16> read_addresses{};
+    std::array<std::uint64_t,16> write_addresses{};
+    if(!translate_and_validate(address,total_size,mmu::AccessType::Read,
+            core::MemoryPermission::Read,read_addresses)||
+       !translate_and_validate(address,total_size,mmu::AccessType::Write,
+            core::MemoryPermission::Write,write_addresses))return false;
+    for(std::size_t index=0U;index<total_size;++index){
+        if(read_addresses[index]!=write_addresses[index])return false;
+        if(index!=0U&&read_addresses[index]!=read_addresses[0]+index)return false;
+    }
+    return physical_memory_.atomic_compare_exchange_pair(read_addresses[0],
+        element_size,expected_low,expected_high,desired_low,desired_high,
+        previous_low,previous_high,exchanged);
 }
 
 bool CpuMemory::read_exclusive(const std::uint64_t address,
