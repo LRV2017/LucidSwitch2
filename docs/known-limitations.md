@@ -181,3 +181,10 @@ The guest GPU memory class is bounded host-backed storage, not a hardware memory
 - The shared MemoryBus synchronizes mappings, reads, writes, and exclusive reservations; normal stores update reservation versions under the same lock as the byte write.
 - This is coherent shared backing memory, not a model of private CPU caches or the complete AArch64 weak-memory model. DMB/DSB/ISB and acquire/release instructions remain sequential approximations.
 - Native JIT, code-cache invalidation, cache-maintenance behavior, TLB shootdowns and hardware-faithful SMP remain unimplemented.
+
+
+## AArch64 basic-block cache
+
+- `A64BlockCache` caches short basic blocks of instruction words for direct/identity-mapped guest memory and reuses them through the existing interpreter.
+- Memory mappings carry generation identifiers. Guest writes and permission changes advance a region generation; cached blocks from stale generations are discarded before reuse. Self-modifying code is detected at instruction boundaries.
+- The current cache is not a native JIT: it does not emit host machine code, perform register allocation, specialize instructions, or support translated virtual-address cache tagging. It is an optimization and invalidation foundation for a later recompiler.
