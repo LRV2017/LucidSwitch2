@@ -1,4 +1,5 @@
 #include "lucid/core/emulator.hpp"
+#include "lucid/kernel/runtime.hpp"
 #include "lucid/cpu/block_cache.hpp"
 #include "lucid/core/memory_bus.hpp"
 #include "lucid/gpu/vulkan_backend.hpp"
@@ -27,7 +28,7 @@
 #include <vector>
 
 namespace {
-constexpr const char* kVersion = "0.28.0";
+constexpr const char* kVersion = "0.34.0";
 constexpr std::uint64_t kDemoBase = 0x1000U;
 constexpr std::uint64_t kDemoInstructionBudget = 16U;
 constexpr std::uint64_t kDefaultHomebrewBudget = 100000U;
@@ -532,49 +533,73 @@ int run_switch2_elf_homebrew(const std::filesystem::path& path,
         return 1;
     }
 
-    lucid::core::MemoryBus memory;
-    lucid::switch2::HomebrewElfLoader loader;
-    lucid::switch2::HomebrewElfLoadInfo load_info{};
-    std::string error;
-    if (!loader.load(image, memory, load_info, &error)) {
-        std::cerr << "Switch 2 static ELF homebrew loader rejected the image: "
-                  << error << "\n";
-        return 1;
-    }
-
-    // Provide a bounded generic test stack. This is not a Horizon TLS block,
-    // process launch context, or an application ABI implementation.
     constexpr std::uint64_t stack_base = 0x0000F00000000000ULL;
     constexpr std::size_t stack_size = 1024U * 1024U;
-    if (!memory.map_region(stack_base, stack_size, &error,
-                           lucid::core::MemoryPermission::ReadWrite)) {
-        std::cerr << "Could not allocate the standalone ELF test stack: "
+    lucid::kernel::Runtime runtime;
+    lucid::switch2::HomebrewElfLoadInfo load_info{};
+    std::string error;
+    std::uint32_t process_id = 0U;
+    if (!runtime.create_process("switch2-homebrew-test", process_id, &error)) {
+        std::cerr << "Could not create a process for the ELF test image: "
                   << error << "\n";
         return 1;
     }
+    if (!runtime.load_process_elf(process_id, image, stack_base, stack_size,
+                                  load_info, &error)) {
+        std::cerr << "Switch 2 static ELF homebrew loader rejected the image: "
+                  << error << "\n";
+        (void)runtime.terminate_process(process_id);
+        return 1;
+    }
 
-    lucid::cpu::CpuContext context{};
-    context.program_counter = load_info.entry_point;
-    context.sp = stack_base + stack_size;
-    lucid::cpu::A64BlockCache cache;
-    const auto run = cache.run(context, memory, instruction_budget);
+    std::uint32_t thread_id = 0U;
+    if (!runtime.create_thread(process_id, load_info.entry_point,
+            stack_base + stack_size, 32U, 0U, thread_id, &error)) {
+        std::cerr << "Could not create the ELF main thread: " << error << "\n";
+        (void)runtime.terminate_process(process_id);
+        return 1;
+    }
+    std::uint32_t scheduled_thread = 0U;
+    if (!runtime.schedule_next(scheduled_thread, &error) ||
+        scheduled_thread != thread_id) {
+        std::cerr << "Could not schedule the ELF main thread: " << error << "\n";
+        (void)runtime.terminate_process(process_id);
+        return 1;
+    }
 
-    std::cout << "Switch 2-target static AArch64 ELF homebrew test runner\n"
+    lucid::kernel::ThreadRunReport run{};
+    if (!runtime.run_current(instruction_budget, run, &error)) {
+        std::cerr << "The process CPU runner could not start: " << error << "\n";
+        (void)runtime.terminate_process(process_id);
+        return 1;
+    }
+    lucid::kernel::ThreadInfo thread_info{};
+    if (!runtime.get_thread(thread_id, thread_info)) {
+        std::cerr << "The process thread disappeared from the kernel test runtime.\n";
+        (void)runtime.terminate_process(process_id);
+        return 1;
+    }
+
+    std::cout << "Switch 2-target static AArch64 ELF homebrew process runner\n"
+              << "Process ID: " << process_id << "\n"
+              << "Thread ID: " << thread_id << "\n"
               << "Entry point: 0x" << std::hex << load_info.entry_point << "\n"
-              << "Loaded segments: " << std::dec << load_info.loaded_segments << "\n"
-              << "Mapped image memory: " << load_info.total_memory_bytes << " bytes\n"
+              << "Final PC: 0x" << thread_info.context.program_counter << std::dec << "\n"
+              << "Loaded segments: " << load_info.loaded_segments << "\n"
+              << "ELF image memory: " << load_info.total_memory_bytes << " bytes\n"
+              << "Process mapped memory (including stack): "
+              << runtime.process_memory_bytes(process_id) << " bytes\n"
               << "Instructions retired: " << run.instructions_executed << "\n"
-              << "Final PC: 0x" << std::hex << context.program_counter << std::dec << "\n"
-              << "Cached blocks compiled: " << cache.stats().blocks_compiled << "\n"
-              << "Cache hits: " << cache.stats().cache_hits << "\n"
               << "Stop reason: " << lucid::core::to_string(run.stop_reason) << "\n"
-              << "Runner: cached A64 interpreter; no native JIT or Horizon OS.\n"
-              << "GPU: no guest Ampere emulation; this test runner is CPU-only.\n";
-    if (!run.instruction_budget_exhausted) {
+              << "Runner: process-isolated cached A64 interpreter; no native JIT or Horizon OS.\n"
+              << "GPU: no guest Ampere emulation; this runner is CPU-only.\n";
+    const bool completed = run.instruction_budget_exhausted;
+    (void)runtime.terminate_process(process_id);
+    if (!completed) {
         std::cerr << "The ELF program stopped before its instruction budget.\n";
         return 1;
     }
-    std::cout << "[PASS] static ELF homebrew image reached the bounded instruction budget.\n";
+    std::cout << "[PASS] static ELF homebrew process reached the bounded instruction budget.\n";
     return 0;
 }
 

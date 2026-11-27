@@ -5,12 +5,47 @@
 #include <cstdint>
 #include <iostream>
 #include <string>
+#include <vector>
 
 namespace {
 int failures = 0;
 void expect(const bool condition, const char* message) {
     if (condition) std::cout << "[PASS] " << message << "\n";
     else { ++failures; std::cerr << "[FAIL] " << message << "\n"; }
+}
+
+void put_elf16(std::vector<std::uint8_t>& bytes,const std::size_t offset,
+                 const std::uint16_t value){
+    bytes[offset]=static_cast<std::uint8_t>(value&0xFFU);
+    bytes[offset+1U]=static_cast<std::uint8_t>(value>>8U);
+}
+void put_elf32(std::vector<std::uint8_t>& bytes,const std::size_t offset,
+               const std::uint32_t value){
+    for(std::size_t i=0U;i<4U;++i)
+        bytes[offset+i]=static_cast<std::uint8_t>((value>>(i*8U))&0xFFU);
+}
+void put_elf64(std::vector<std::uint8_t>& bytes,const std::size_t offset,
+               const std::uint64_t value){
+    for(std::size_t i=0U;i<8U;++i)
+        bytes[offset+i]=static_cast<std::uint8_t>((value>>(i*8U))&0xFFU);
+}
+std::vector<std::uint8_t> make_static_a64_elf(){
+    std::vector<std::uint8_t> bytes(0x104U,0U);
+    bytes[0]=0x7FU;bytes[1]='E';bytes[2]='L';bytes[3]='F';
+    bytes[4]=2U;bytes[5]=1U;bytes[6]=1U;
+    put_elf16(bytes,16U,2U);put_elf16(bytes,18U,183U);
+    put_elf32(bytes,20U,1U);put_elf64(bytes,24U,0x100000U);
+    put_elf64(bytes,32U,64U);
+    put_elf16(bytes,52U,64U);put_elf16(bytes,54U,56U);
+    put_elf16(bytes,56U,1U);
+    put_elf32(bytes,64U,1U);put_elf32(bytes,68U,5U);
+    put_elf64(bytes,72U,0x100U);
+    put_elf64(bytes,80U,0x100000U);put_elf64(bytes,88U,0x100000U);
+    put_elf64(bytes,96U,4U);put_elf64(bytes,104U,16U);
+    put_elf64(bytes,112U,0x100U);
+    bytes[0x100U]=0x1FU;bytes[0x101U]=0x20U;
+    bytes[0x102U]=0x03U;bytes[0x103U]=0xD5U; // NOP
+    return bytes;
 }
 
 void test_process_and_thread_creation() {
@@ -123,6 +158,65 @@ void test_process_owned_handles() {
                                   handle, &error),
            "prevent thread creation in a terminated process");
 }
+void test_static_elf_loads_into_private_process_and_runs() {
+    using namespace lucid;
+    kernel::Runtime runtime;
+    std::uint32_t process=0U,thread=0U,scheduled=0U;
+    std::string error;
+    expect(runtime.create_process("static-elf-process",process,&error),
+        "create process for integrated static ELF loader test");
+    const auto image=make_static_a64_elf();
+    constexpr std::uint64_t stack_base=0x0000F00000000000ULL;
+    constexpr std::size_t stack_size=64U*1024U;
+    switch2::HomebrewElfLoadInfo info{};
+    expect(runtime.load_process_elf(process,image,stack_base,stack_size,info,&error),
+        "load an AArch64 static ELF and stack into the process-owned memory map");
+    expect(info.entry_point==0x100000U&&info.loaded_segments==1U&&
+           info.total_memory_bytes==16U,
+        "report loaded ELF entry and process segment memory");
+    expect(runtime.process_memory_bytes(process)==stack_size+16U,
+        "account both ELF segments and the process stack against its memory budget");
+    std::array<std::uint8_t,16U> code_and_bss{};
+    expect(runtime.read_process_memory(process,info.entry_point,code_and_bss,&error)&&
+           code_and_bss[0]==0x1FU&&code_and_bss[1]==0x20U&&
+           code_and_bss[2]==0x03U&&code_and_bss[3]==0xD5U&&
+           code_and_bss[15]==0U,
+        "verify ELF code bytes and zero-filled BSS in the process address space");
+    std::uint32_t stack_thread=0U;
+    expect(runtime.create_thread(process,info.entry_point,stack_base+stack_size,
+        8U,0U,stack_thread,&error)&&
+        runtime.schedule_next(scheduled,&error)&&scheduled==stack_thread,
+        "create and schedule the process main thread at the ELF entry point");
+    kernel::ThreadRunReport report{};
+    expect(runtime.run_current(1U,report,&error)&&
+           report.instructions_executed==1U&&report.instruction_budget_exhausted,
+        "execute the ELF entry instruction through the process-local A64 block cache");
+    kernel::ThreadInfo thread_info{};
+    expect(runtime.get_thread(stack_thread,thread_info)&&
+           thread_info.state==kernel::ThreadState::Running&&
+           thread_info.context.program_counter==info.entry_point+4U,
+        "preserve the ELF thread CPU context after its first instruction");
+    expect(!runtime.write_process_memory(process,info.entry_point,
+        std::span<const std::uint8_t>(code_and_bss.data(),1U),&error),
+        "keep ELF executable text read-only after process loading");
+    expect(runtime.terminate_process(process,&error)&&
+           runtime.process_memory_bytes(process)==0U,
+        "release process ELF and stack mappings on process exit");
+
+    kernel::Runtime rejected_runtime;
+    std::uint32_t rejected_process=0U;
+    expect(rejected_runtime.create_process("rejected-elf",rejected_process,&error),
+        "create process for invalid ELF rollback test");
+    auto truncated=image;
+    truncated.resize(80U);
+    switch2::HomebrewElfLoadInfo rejected_info{};
+    expect(!rejected_runtime.load_process_elf(rejected_process,truncated,
+        stack_base,stack_size,rejected_info,&error),
+        "reject a truncated process ELF before executable launch");
+    expect(rejected_runtime.process_memory_bytes(rejected_process)==0U,
+        "roll back the reserved process stack after ELF load rejection");
+}
+
 void test_process_address_space_isolation_and_execution() {
     using namespace lucid;
     kernel::Runtime runtime;
@@ -362,6 +456,7 @@ int main() {
     test_event_semaphore_and_mutex_primitives();
     test_scheduled_threads_execute_a64_code();
     test_process_address_space_isolation_and_execution();
+    test_static_elf_loads_into_private_process_and_runs();
     if (failures != 0) {
         std::cerr << failures << " kernel runtime test(s) failed.\n";
         return 1;

@@ -20,7 +20,7 @@ lucidswitch2 --run-switch2-elf .\homebrew.elf
 lucidswitch2 --run-switch2-elf .\homebrew.elf 500000
 ```
 
-The runner builds a bounded generic stack, initializes PC to the ELF entry point, and runs through `A64BlockCache`. The block cache reuses raw instruction words and invalidates them when a region generation changes. Execution still uses the A64 interpreter.
+The runner creates a bounded kernel-test process with its own address space, reserves a generic 1 MiB stack, maps the ELF segments into that process, creates its main thread, schedules it, and executes the requested instruction budget through the process-local `A64BlockCache`. The cache reuses raw instruction words and invalidates them when a region generation changes. Execution still uses the A64 interpreter. This validates the path from ELF image to process and thread context; it does not provide Horizon TLS, process capabilities, syscall ABI, service sessions, or console application startup.
 
 ## Not included
 
