@@ -45,6 +45,7 @@ add_library(lucid_core
     src/switch/executable.cpp
     src/switch/compatibility.cpp
     src/switch2/cpu_cluster.cpp
+    src/switch2/homebrew_elf_loader.cpp
     src/switch/homebrew_loader.cpp
     src/switch/nsp_package.cpp
 )
@@ -147,6 +148,7 @@ if(LUCID_BUILD_TESTS)
         lucid_kernel_runtime_tests
         lucid_ipc_tests
         lucid_switch2_cpu_cluster_tests
+        lucid_switch2_elf_loader_tests
     )
 
     add_executable(lucid_tests tests/test_main.cpp)
@@ -162,6 +164,7 @@ if(LUCID_BUILD_TESTS)
     add_executable(lucid_kernel_runtime_tests tests/test_kernel_runtime.cpp)
     add_executable(lucid_ipc_tests tests/test_ipc.cpp)
     add_executable(lucid_switch2_cpu_cluster_tests tests/test_switch2_cpu_cluster.cpp)
+    add_executable(lucid_switch2_elf_loader_tests tests/test_switch2_elf_loader.cpp)
 
     foreach(test_target IN LISTS LUCID_TEST_TARGETS)
         target_link_libraries(${test_target} PRIVATE lucid_core)
@@ -187,4 +190,5 @@ if(LUCID_BUILD_TESTS)
     add_test(NAME lucid_kernel_runtime_tests COMMAND lucid_kernel_runtime_tests)
     add_test(NAME lucid_ipc_tests COMMAND lucid_ipc_tests)
     add_test(NAME lucid_switch2_cpu_cluster_tests COMMAND lucid_switch2_cpu_cluster_tests)
+    add_test(NAME lucid_switch2_elf_loader_tests COMMAND lucid_switch2_elf_loader_tests)
 endif()

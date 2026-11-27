@@ -75,8 +75,8 @@ constexpr CompatibilityFeature kSwitch2CpuClusterFeature{
 
 constexpr CompatibilityFeature kSwitch2ExecutableFeature{
     "Executable", "Switch 2 title/package loading",
-    ImplementationStatus::NotImplemented,
-    "No Switch 2 retail package parser, authenticated loader, or application runtime."
+    ImplementationStatus::Partial,
+    "A strict loader accepts ordinary static ELF64 little-endian AArch64 ET_EXEC homebrew segments with W^X permissions and BSS zero-fill. It does not load Nintendo containers, NSO/NRO variants for Switch 2, dynamic relocations, imports, or retail titles."
 };
 
 constexpr CompatibilityFeature kNspPackageFeature{

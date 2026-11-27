@@ -23,6 +23,10 @@ public:
     [[nodiscard]] bool map_region(std::uint64_t base, std::size_t size,
         std::string* error = nullptr,
         MemoryPermission permissions = MemoryPermission::ReadWriteExecute);
+    [[nodiscard]] bool protect_region(std::uint64_t base, std::size_t size,
+        MemoryPermission permissions, std::string* error = nullptr);
+    [[nodiscard]] bool unmap_region(std::uint64_t base, std::size_t size,
+        std::string* error = nullptr);
     [[nodiscard]] bool read(std::uint64_t address, std::span<std::uint8_t> output,
         std::string* error = nullptr) const;
     [[nodiscard]] bool read_instruction(std::uint64_t address,

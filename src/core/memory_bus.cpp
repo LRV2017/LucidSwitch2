@@ -60,6 +60,40 @@ bool MemoryBus::map_region(std::uint64_t base, std::size_t size,
     }
     return true;
 }
+
+bool MemoryBus::protect_region(const std::uint64_t base,
+    const std::size_t size, const MemoryPermission permissions,
+    std::string* error) {
+    if (permissions == MemoryPermission::None) {
+        set_error(error, "A memory region must retain at least one permission.");
+        return false;
+    }
+    std::unique_lock lock(mutex_);
+    for (Region& region : regions_) {
+        if (region.base == base && region.bytes.size() == size) {
+            region.permissions = permissions;
+            return true;
+        }
+    }
+    set_error(error, "The exact memory region to protect was not found.");
+    return false;
+}
+
+bool MemoryBus::unmap_region(const std::uint64_t base,
+    const std::size_t size, std::string* error) {
+    std::unique_lock lock(mutex_);
+    const auto it = std::find_if(regions_.begin(), regions_.end(),
+        [base, size](const Region& region) {
+            return region.base == base && region.bytes.size() == size;
+        });
+    if (it == regions_.end()) {
+        set_error(error, "The exact memory region to unmap was not found.");
+        return false;
+    }
+    regions_.erase(it);
+    return true;
+}
+
 MemoryBus::Region* MemoryBus::find_region(std::uint64_t address) noexcept {
     for (Region& region : regions_) {
         if (address >= region.base &&
