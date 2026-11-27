@@ -23,7 +23,7 @@
 #include <vector>
 
 namespace {
-constexpr const char* kVersion = "0.24.0";
+constexpr const char* kVersion = "0.25.0";
 constexpr std::uint64_t kDemoBase = 0x1000U;
 constexpr std::uint64_t kDemoInstructionBudget = 16U;
 constexpr std::uint64_t kDefaultHomebrewBudget = 100000U;

@@ -96,6 +96,8 @@ public:
     ) override;
 
     [[nodiscard]] StepResult step(CpuContext& context, CpuMemory& memory);
+    [[nodiscard]] StepResult step_decoded(CpuContext& context, CpuMemory& memory,
+                                          std::uint32_t instruction);
 
     [[nodiscard]] std::string_view name() const noexcept override {
         return "Lucid A64 subset interpreter";

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(LucidSwitch2 VERSION 0.24.0
+project(LucidSwitch2 VERSION 0.25.0
     DESCRIPTION "Clean-room console emulation research scaffold"
     LANGUAGES CXX
 )
@@ -28,6 +28,7 @@ add_library(lucid_core
     src/kernel/runtime.cpp
     src/ipc/cmif.cpp
     src/cpu/a64_interpreter.cpp
+    src/cpu/block_cache.cpp
     src/cpu/cpu_memory.cpp
     src/arch/system_registers.cpp
     src/arch/svc_dispatcher.cpp
@@ -139,6 +140,7 @@ if(LUCID_BUILD_TESTS)
     set(LUCID_TEST_TARGETS
         lucid_tests
         lucid_a64_tests
+        lucid_a64_block_cache_tests
         lucid_architecture_tests
         lucid_exception_tests
         lucid_gpu_tests
@@ -156,6 +158,7 @@ if(LUCID_BUILD_TESTS)
 
     add_executable(lucid_tests tests/test_main.cpp)
     add_executable(lucid_a64_tests tests/test_a64.cpp)
+    add_executable(lucid_a64_block_cache_tests tests/test_a64_block_cache.cpp)
     add_executable(lucid_architecture_tests tests/test_architecture.cpp)
     add_executable(lucid_exception_tests tests/test_exceptions.cpp)
     add_executable(lucid_gpu_tests tests/test_gpu.cpp)
@@ -183,6 +186,7 @@ if(LUCID_BUILD_TESTS)
 
     add_test(NAME lucid_tests COMMAND lucid_tests)
     add_test(NAME lucid_a64_tests COMMAND lucid_a64_tests)
+    add_test(NAME lucid_a64_block_cache_tests COMMAND lucid_a64_block_cache_tests)
     add_test(NAME lucid_architecture_tests COMMAND lucid_architecture_tests)
     add_test(NAME lucid_exception_tests COMMAND lucid_exception_tests)
     add_test(NAME lucid_gpu_tests COMMAND lucid_gpu_tests)

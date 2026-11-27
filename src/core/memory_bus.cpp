@@ -50,6 +50,7 @@ bool MemoryBus::map_region(std::uint64_t base, std::size_t size,
         region.bytes.resize(size, 0U);
         region.exclusive_versions.resize(
             ((size - 1U) / ExclusiveGranuleBytes) + 1U, 0U);
+        bump_generation(region);
         regions_.push_back(std::move(region));
     } catch (const std::bad_alloc&) {
         set_error(error, "Not enough host memory to allocate the requested region.");
@@ -72,6 +73,7 @@ bool MemoryBus::protect_region(const std::uint64_t base,
     for (Region& region : regions_) {
         if (region.base == base && region.bytes.size() == size) {
             region.permissions = permissions;
+            bump_generation(region);
             return true;
         }
     }
@@ -92,6 +94,11 @@ bool MemoryBus::unmap_region(const std::uint64_t base,
     }
     regions_.erase(it);
     return true;
+}
+
+void MemoryBus::bump_generation(Region& region) noexcept {
+    region.generation = next_generation_++;
+    if (next_generation_ == 0U) next_generation_ = 1U;
 }
 
 MemoryBus::Region* MemoryBus::find_region(std::uint64_t address) noexcept {
@@ -173,6 +180,7 @@ bool MemoryBus::write(std::uint64_t address, std::span<const std::uint8_t> input
         if (region->exclusive_versions[index] == 0U)
             ++region->exclusive_versions[index];
     }
+    bump_generation(*region);
     return true;
 }
 
@@ -231,6 +239,7 @@ bool MemoryBus::write_exclusive(const std::uint64_t address,
     ++region->exclusive_versions[granule];
     if (region->exclusive_versions[granule] == 0U)
         ++region->exclusive_versions[granule];
+    bump_generation(*region);
     stored = true;
     return true;
 }
@@ -258,5 +267,11 @@ bool MemoryBus::write8(std::uint64_t address, std::uint8_t value,
 std::size_t MemoryBus::region_count() const {
     std::shared_lock lock(mutex_);
     return regions_.size();
+}
+
+std::uint64_t MemoryBus::region_generation(const std::uint64_t address) const {
+    std::shared_lock lock(mutex_);
+    const Region* region = find_region(address);
+    return region == nullptr ? 0U : region->generation;
 }
 } // namespace lucid::core

@@ -212,15 +212,18 @@ StepResult A64Interpreter::step(CpuContext& context, core::MemoryBus& memory) {
 }
 
 StepResult A64Interpreter::step(CpuContext& context, CpuMemory& memory) {
-    if ((context.program_counter & 3U) != 0U) {
+    if ((context.program_counter & 3U) != 0U)
         return StepResult::MisalignedProgramCounter;
-    }
-
     std::uint32_t instruction = 0U;
-    if (!fetch_instruction(memory, context.program_counter, instruction)) {
+    if (!fetch_instruction(memory, context.program_counter, instruction))
         return StepResult::MemoryFault;
-    }
+    return step_decoded(context, memory, instruction);
+}
 
+StepResult A64Interpreter::step_decoded(CpuContext& context, CpuMemory& memory,
+                                        const std::uint32_t instruction) {
+    if ((context.program_counter & 3U) != 0U)
+        return StepResult::MisalignedProgramCounter;
     const std::uint64_t next_pc = context.program_counter + 4U;
 
 

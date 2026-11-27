@@ -45,6 +45,7 @@ public:
         bool& stored, std::string* error = nullptr);
     [[nodiscard]] bool can_access(std::uint64_t address, std::size_t size,
         MemoryPermission permission) const;
+    [[nodiscard]] std::uint64_t region_generation(std::uint64_t address) const;
     [[nodiscard]] bool read8(std::uint64_t address, std::uint8_t& value,
         std::string* error = nullptr) const;
     [[nodiscard]] bool write8(std::uint64_t address, std::uint8_t value,
@@ -56,6 +57,7 @@ private:
         std::vector<std::uint8_t> bytes;
         MemoryPermission permissions{MemoryPermission::ReadWriteExecute};
         std::vector<std::uint64_t> exclusive_versions;
+        std::uint64_t generation{};
     };
     [[nodiscard]] Region* find_region(std::uint64_t address) noexcept;
     [[nodiscard]] const Region* find_region(std::uint64_t address) const noexcept;
@@ -63,6 +65,8 @@ private:
         std::span<std::uint8_t> output, MemoryPermission permission,
         std::string* error) const;
     mutable std::shared_mutex mutex_;
+    void bump_generation(Region& region) noexcept;
+    std::uint64_t next_generation_{1U};
     std::vector<Region> regions_;
 };
 } // namespace lucid::core
