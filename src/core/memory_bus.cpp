@@ -265,8 +265,8 @@ bool MemoryBus::read_exclusive(const std::uint64_t address,
         set_error(error, "Exclusive loads require aligned 4-byte or 8-byte accesses.");
         return false;
     }
-    const Region* region = find_region(address);
     std::shared_lock lock(mutex_);
+    const Region* region = find_region(address);
     if (region == nullptr || !has_permission(region->permissions, MemoryPermission::Read)) {
         set_error(error, "The exclusive-load address is unmapped or unreadable.");
         return false;
@@ -292,8 +292,8 @@ bool MemoryBus::write_exclusive(const std::uint64_t address,
         set_error(error, "Exclusive stores require aligned 4-byte or 8-byte accesses.");
         return false;
     }
-    Region* region = find_region(address);
     std::unique_lock lock(mutex_);
+    Region* region = find_region(address);
     if (region == nullptr || !has_permission(region->permissions, MemoryPermission::Write)) {
         set_error(error, "The exclusive-store address is unmapped or unwritable.");
         return false;
