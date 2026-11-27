@@ -15,15 +15,15 @@ This is an original, deterministic host-side substrate for future guest-process 
 
 ## Not implemented
 
-- No memory/address-space ownership, page-table isolation, process image loading, MOD0 relocation, NSO loading, or launch-argument ABI.
-- No preemptive timer scheduler, CPU core migration, TLS ABI, kernel stacks, mutex wait queues, or event/semaphore semantics.
+- No ARM stage-1 page tables per process, ASIDs/TLB context switching, shared-memory mapping, guard pages, page faults, process image loading, MOD0 relocation, NSO loading, or launch-argument ABI.
+- No preemptive timer scheduler, CPU core migration, TLS ABI, kernel stacks, priority inheritance, timed waits, or complete Horizon mutex/event/semaphore semantics.
 - No SVC dispatch table, HIPC/CMIF sessions, service manager, filesystem, audio, input, display, or Horizon object semantics.
-- CPU contexts are held by this scheduler but are not automatically run by the emulator execution loop.
+- The process-local runner executes bounded A64 instruction budgets; it is not integrated with a complete SVC/Horizon syscall dispatcher.
 - This runtime is not enough to boot Horizon or run an ordinary Switch application.
 
 ## Design constraints
 
-The runtime is single-host-thread and deterministic. It uses bounded tables and no background threads. Wait keys are opaque scheduler identifiers, not guest-visible Horizon handles. Kernel handles are process-local and identify typed host-side objects only; object implementations and service protocols remain future work.
+The runtime is single-host-thread and deterministic. It uses bounded tables and no background threads. Each process has a separate flat checked memory bus capped at 512 MiB; wait keys are opaque scheduler identifiers, not guest-visible Horizon handles. Kernel handles are process-local and identify typed host-side objects only; object implementations and service protocols remain future work.
 
 
 ## Synchronization object substrate

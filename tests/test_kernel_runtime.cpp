@@ -178,6 +178,10 @@ void test_process_address_space_isolation_and_execution() {
     expect(runtime.process_memory_bytes(process_a)==0x1000U&&
            runtime.process_memory_bytes(process_b)==0x1000U,
         "track per-process mapped memory usage");
+    expect(!runtime.map_process_region(process_a,0x5000U,
+        kernel::MaximumProcessMemoryBytes+1U,core::MemoryPermission::ReadWrite,&error)&&
+        runtime.process_memory_bytes(process_a)==0x1000U,
+        "reject a process mapping that exceeds its 512 MiB memory budget");
     expect(runtime.protect_process_region(process_b,0x1000U,0x1000U,
         core::MemoryPermission::Read|core::MemoryPermission::Execute,&error),
         "apply process-local executable read-only permissions");
@@ -190,6 +194,11 @@ void test_process_address_space_isolation_and_execution() {
         "prevent access to memory after process termination");
     expect(runtime.read_process_memory(process_a,0x1000U,read_a,&error)&&
            read_a==bytes_a,"preserve process A memory after process B exits");
+    expect(runtime.unmap_process_region(process_a,0x1000U,0x1000U,&error)&&
+           runtime.process_memory_bytes(process_a)==0U,
+        "unmap a process region and release its memory budget");
+    expect(!runtime.read_process_memory(process_a,0x1000U,read_a,&error),
+        "reject accesses after a process region has been unmapped");
 }
 
 void test_scheduled_threads_execute_a64_code() {
