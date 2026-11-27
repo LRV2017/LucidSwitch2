@@ -957,10 +957,10 @@ int main() {
     expect(cpu.step(pair_state, pair_memory) ==
                lucid::cpu::StepResult::Executed,
            "execute signed-offset SIMD Q-register pair load");
-    expect(pair_state.v[6].low == 0xAABBCCDDU &&
+    expect(pair_state.v[6].low == 0x55667788AABBCCDDULL &&
            pair_state.v[6].high == 0U &&
-           pair_state.v[7].low == 0x55667788U &&
-           pair_state.v[7].high == 0U,
+           pair_state.v[7].low == 0x0123456789ABCDEFULL &&
+           pair_state.v[7].high == 0xFEDCBA9876543210ULL,
            "SIMD Q pair loads all 128 bits from its 32-byte memory range");
 
     if (failures != 0) {

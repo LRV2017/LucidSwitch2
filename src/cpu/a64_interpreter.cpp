@@ -1,6 +1,7 @@
 #include "lucid/cpu/cpu_backend.hpp"
 #include "lucid/arch/system_registers.hpp"
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cstdint>
