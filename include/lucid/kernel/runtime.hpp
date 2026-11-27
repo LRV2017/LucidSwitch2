@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <string>
 
 namespace lucid::kernel {
@@ -12,6 +13,7 @@ namespace lucid::kernel {
 inline constexpr std::size_t MaximumProcesses = 64U;
 inline constexpr std::size_t MaximumThreads = 256U;
 inline constexpr std::size_t MaximumHandles = 4096U;
+inline constexpr std::size_t MaximumProcessMemoryBytes = 512U * 1024U * 1024U;
 
 enum class ProcessState { Active, Terminated };
 enum class ThreadState { Ready, Running, Blocked, Terminated, Faulted };
@@ -72,6 +74,23 @@ public:
     [[nodiscard]] bool run_current(core::MemoryBus& memory,
         std::uint64_t instruction_budget, ThreadRunReport& report,
         std::string* error = nullptr);
+    [[nodiscard]] bool map_process_region(std::uint32_t process_id,
+        std::uint64_t base, std::size_t size, core::MemoryPermission permissions,
+        std::string* error = nullptr);
+    [[nodiscard]] bool protect_process_region(std::uint32_t process_id,
+        std::uint64_t base, std::size_t size, core::MemoryPermission permissions,
+        std::string* error = nullptr);
+    [[nodiscard]] bool unmap_process_region(std::uint32_t process_id,
+        std::uint64_t base, std::size_t size, std::string* error = nullptr);
+    [[nodiscard]] bool read_process_memory(std::uint32_t process_id,
+        std::uint64_t address, std::span<std::uint8_t> output,
+        std::string* error = nullptr) const;
+    [[nodiscard]] bool write_process_memory(std::uint32_t process_id,
+        std::uint64_t address, std::span<const std::uint8_t> input,
+        std::string* error = nullptr);
+    [[nodiscard]] std::size_t process_memory_bytes(std::uint32_t process_id) const noexcept;
+    [[nodiscard]] bool run_current(std::uint64_t instruction_budget,
+        ThreadRunReport& report, std::string* error = nullptr);
     [[nodiscard]] bool block_current(
         std::uint64_t wait_key, std::uint32_t& next_thread_id,
         std::string* error = nullptr);
@@ -139,6 +158,11 @@ private:
     void prune_sync_objects() noexcept;
     void release_owned_mutexes(std::uint32_t thread_id) noexcept;
 
+    struct ProcessAddressSpace {
+        std::unique_ptr<core::MemoryBus> memory;
+        std::size_t mapped_bytes{};
+    };
+
     struct SyncObject {
         KernelObjectType type{KernelObjectType::Event};
         bool signaled{};
@@ -154,10 +178,12 @@ private:
         KernelObjectType expected_type, std::uint64_t& object_id) noexcept;
 
     std::map<std::uint32_t, ProcessInfo> processes_;
+    std::map<std::uint32_t, ProcessAddressSpace> process_address_spaces_;
     std::map<std::uint32_t, ThreadInfo> threads_;
     std::map<std::uint32_t, HandleInfo> handles_;
     std::map<std::uint64_t, SyncObject> sync_objects_;
-    cpu::A64BlockCache execution_cache_;
+    std::map<std::uint32_t, cpu::A64BlockCache> shared_execution_caches_;
+    std::map<std::uint32_t, cpu::A64BlockCache> process_execution_caches_;
     std::uint32_t next_process_id_{1U};
     std::uint32_t next_thread_id_{1U};
     std::uint32_t next_handle_{0x100U};

@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include <limits>
+#include <new>
 #include <utility>
 
 namespace lucid::kernel {
@@ -28,12 +29,23 @@ bool Runtime::create_process(
         set_error(error, "The bounded process table is full.");
         return false;
     }
-    ProcessInfo process{};
-    process.id = next_process_id_++;
-    process.name = name;
-    process.state = ProcessState::Active;
-    process_id = process.id;
-    processes_.emplace(process.id, std::move(process));
+    const std::uint32_t new_id = next_process_id_++;
+    try {
+        ProcessInfo process{};
+        process.id = new_id;
+        process.name = name;
+        process.state = ProcessState::Active;
+        auto memory = std::make_unique<core::MemoryBus>();
+        processes_.emplace(new_id, std::move(process));
+        process_address_spaces_.emplace(new_id,
+            ProcessAddressSpace{std::move(memory), 0U});
+    } catch (const std::bad_alloc&) {
+        processes_.erase(new_id);
+        process_address_spaces_.erase(new_id);
+        set_error(error, "Not enough host memory to create the process address space.");
+        return false;
+    }
+    process_id = new_id;
     return true;
 }
 
@@ -141,7 +153,7 @@ bool Runtime::run_current(core::MemoryBus& memory,
         return false;
     }
 
-    const cpu::A64BlockRunReport execution = execution_cache_.run(
+    const cpu::A64BlockRunReport execution = shared_execution_caches_[found->second.process_id].run(
         found->second.context, memory, instruction_budget);
     report.instructions_executed = execution.instructions_executed;
     report.stop_reason = execution.stop_reason;
@@ -273,6 +285,9 @@ bool Runtime::terminate_process(
             ++handle;
     }
     prune_sync_objects();
+    process_address_spaces_.erase(process_id);
+    shared_execution_caches_.erase(process_id);
+    process_execution_caches_.erase(process_id);
     return true;
 }
 
@@ -297,6 +312,106 @@ std::uint32_t Runtime::current_thread_id() const noexcept {
 }
 std::size_t Runtime::process_count() const noexcept { return processes_.size(); }
 std::size_t Runtime::thread_count() const noexcept { return threads_.size(); }
+
+bool Runtime::map_process_region(const std::uint32_t process_id,
+    const std::uint64_t base, const std::size_t size,
+    const core::MemoryPermission permissions, std::string* error) {
+    const auto space=process_address_spaces_.find(process_id);
+    if(!process_is_active(process_id)||space==process_address_spaces_.end()){
+        set_error(error,"The process has no active address space.");return false;
+    }
+    if(size==0U||size>MaximumProcessMemoryBytes-space->second.mapped_bytes){
+        set_error(error,"The requested mapping exceeds the process memory budget.");return false;
+    }
+    if(!space->second.memory->map_region(base,size,error,permissions))return false;
+    space->second.mapped_bytes+=size;
+    return true;
+}
+
+bool Runtime::protect_process_region(const std::uint32_t process_id,
+    const std::uint64_t base,const std::size_t size,
+    const core::MemoryPermission permissions,std::string* error){
+    const auto space=process_address_spaces_.find(process_id);
+    if(!process_is_active(process_id)||space==process_address_spaces_.end()){
+        set_error(error,"The process has no active address space.");return false;
+    }
+    return space->second.memory->protect_region(base,size,permissions,error);
+}
+
+bool Runtime::unmap_process_region(const std::uint32_t process_id,
+    const std::uint64_t base,const std::size_t size,std::string* error){
+    const auto space=process_address_spaces_.find(process_id);
+    if(!process_is_active(process_id)||space==process_address_spaces_.end()){
+        set_error(error,"The process has no active address space.");return false;
+    }
+    if(!space->second.memory->unmap_region(base,size,error))return false;
+    space->second.mapped_bytes-=size;
+    return true;
+}
+
+bool Runtime::read_process_memory(const std::uint32_t process_id,
+    const std::uint64_t address,std::span<std::uint8_t> output,
+    std::string* error) const{
+    const auto space=process_address_spaces_.find(process_id);
+    if(!process_is_active(process_id)||space==process_address_spaces_.end()){
+        set_error(error,"The process has no active address space.");return false;
+    }
+    return space->second.memory->read(address,output,error);
+}
+
+bool Runtime::write_process_memory(const std::uint32_t process_id,
+    const std::uint64_t address,std::span<const std::uint8_t> input,
+    std::string* error){
+    const auto space=process_address_spaces_.find(process_id);
+    if(!process_is_active(process_id)||space==process_address_spaces_.end()){
+        set_error(error,"The process has no active address space.");return false;
+    }
+    return space->second.memory->write(address,input,error);
+}
+
+std::size_t Runtime::process_memory_bytes(const std::uint32_t process_id) const noexcept{
+    const auto space=process_address_spaces_.find(process_id);
+    return space==process_address_spaces_.end()?0U:space->second.mapped_bytes;
+}
+
+bool Runtime::run_current(const std::uint64_t instruction_budget,
+    ThreadRunReport& report,std::string* error){
+    report={};
+    if(current_thread_id_==0U||instruction_budget==0U){
+        set_error(error,"Running a guest thread requires a scheduled thread and nonzero instruction budget.");
+        return false;
+    }
+    const auto thread=threads_.find(current_thread_id_);
+    if(thread==threads_.end()||thread->second.state!=ThreadState::Running||
+       !process_is_active(thread->second.process_id)){
+        set_error(error,"The current guest-thread state is invalid.");return false;
+    }
+    const auto space=process_address_spaces_.find(thread->second.process_id);
+    if(space==process_address_spaces_.end()||space->second.memory==nullptr){
+        set_error(error,"The current process has no address space.");return false;
+    }
+    const cpu::A64BlockRunReport execution=process_execution_caches_[thread->second.process_id].run(
+        thread->second.context,*space->second.memory,instruction_budget);
+    report.instructions_executed=execution.instructions_executed;
+    report.stop_reason=execution.stop_reason;
+    report.instruction_budget_exhausted=execution.instruction_budget_exhausted;
+    thread->second.last_step_result=execution.stop_reason;
+    if(execution.stop_reason==cpu::StepResult::Halted){
+        thread->second.state=ThreadState::Terminated;
+        thread->second.wait_key=0U;
+        current_thread_id_=0U;
+        release_owned_mutexes(thread->second.id);
+    }else if(execution.stop_reason==cpu::StepResult::UnsupportedInstruction||
+             execution.stop_reason==cpu::StepResult::MemoryFault||
+             execution.stop_reason==cpu::StepResult::MisalignedProgramCounter||
+             execution.stop_reason==cpu::StepResult::SystemRegisterFault){
+        thread->second.state=ThreadState::Faulted;
+        thread->second.wait_key=0U;
+        current_thread_id_=0U;
+        release_owned_mutexes(thread->second.id);
+    }
+    return true;
+}
 
 bool Runtime::create_handle(
     const std::uint32_t owner_process, const KernelObjectType type,

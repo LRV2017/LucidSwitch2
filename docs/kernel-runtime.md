@@ -36,3 +36,10 @@ The host-side Runtime now implements manual/auto-reset events, bounded counting 
 `Runtime::run_current` now executes the current thread's stored AArch64 context against the shared checked `MemoryBus` using the generation-aware block cache. A thread can resume across multiple instruction budgets while retaining registers and PC. Unsupported instructions, fetch/data faults, misaligned PCs and system-register faults transition the thread to `Faulted` and release the scheduler's running slot; a guest halt transitions it to `Terminated`. This is still a cooperative single-host-thread scheduler with one shared memory bus, not per-process address spaces, a Horizon SVC ABI, or a preemptive console scheduler.
 
 Mutex cleanup is also tied to thread/process termination: owned recursive mutexes are released and one eligible waiter is made ready. Waiter selection ignores threads from terminated processes.
+
+
+## Per-process address spaces
+
+Each active Runtime process now owns a separate checked MemoryBus address space with a 512 MiB aggregate mapped-region budget. Regions can be mapped, protected, read, written and unmapped independently. Two processes may use the same guest virtual address while seeing different bytes and permissions. The process-local run_current budget overload resolves the running thread's owner process and executes against that process's memory using a process-specific block cache; caches are separated so identical PCs and per-bus generation counters cannot collide across processes. Terminating a process releases its mappings and its process-local cache.
+
+This is a flat per-process address-space model. It does not implement ARM page-table translation per process, ASIDs/TLB context switching, shared memory, guard pages, kernel/user split, memory-mapped I/O, process capabilities, image relocation, or Horizon process ABI behavior.

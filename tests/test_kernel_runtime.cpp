@@ -123,6 +123,75 @@ void test_process_owned_handles() {
                                   handle, &error),
            "prevent thread creation in a terminated process");
 }
+void test_process_address_space_isolation_and_execution() {
+    using namespace lucid;
+    kernel::Runtime runtime;
+    std::string error;
+    std::uint32_t process_a=0U,process_b=0U,thread_a=0U,thread_b=0U,scheduled=0U;
+    expect(runtime.create_process("isolated-a",process_a,&error)&&
+           runtime.create_process("isolated-b",process_b,&error),
+        "create two isolated guest processes");
+    expect(runtime.map_process_region(process_a,0x1000U,0x1000U,
+        core::MemoryPermission::ReadWriteExecute,&error)&&
+           runtime.map_process_region(process_b,0x1000U,0x1000U,
+        core::MemoryPermission::ReadWriteExecute,&error),
+        "map the same virtual address independently in both processes");
+    const std::array<std::uint32_t,3U> code_a{0xD2800540U,0x91002000U,0x14000000U};
+    const std::array<std::uint32_t,2U> code_b{0xD2800120U,0x14000000U};
+    std::array<std::uint8_t,12U> bytes_a{};
+    std::array<std::uint8_t,8U> bytes_b{};
+    for(std::size_t i=0U;i<code_a.size();++i)
+        for(std::size_t b=0U;b<4U;++b)
+            bytes_a[i*4U+b]=static_cast<std::uint8_t>((code_a[i]>>(b*8U))&0xFFU);
+    for(std::size_t i=0U;i<code_b.size();++i)
+        for(std::size_t b=0U;b<4U;++b)
+            bytes_b[i*4U+b]=static_cast<std::uint8_t>((code_b[i]>>(b*8U))&0xFFU);
+    expect(runtime.write_process_memory(process_a,0x1000U,bytes_a,&error)&&
+           runtime.write_process_memory(process_b,0x1000U,bytes_b,&error),
+        "write different code into matching virtual addresses in each process");
+    std::array<std::uint8_t,12U> read_a{};
+    expect(runtime.read_process_memory(process_a,0x1000U,read_a,&error)&&
+           read_a==bytes_a,"read process A code from its own memory map");
+    std::array<std::uint8_t,12U> read_b{};
+    expect(runtime.read_process_memory(process_b,0x1000U,read_b,&error)&&
+           read_b[0]==bytes_b[0]&&read_b[4]==bytes_b[4],
+        "read process B code from its independent memory map");
+    expect(runtime.create_thread(process_a,0x1000U,0x8000U,5U,0U,thread_a,&error)&&
+           runtime.create_thread(process_b,0x1000U,0x9000U,10U,0U,thread_b,&error),
+        "create threads owned by each isolated process");
+    expect(runtime.schedule_next(scheduled,&error)&&scheduled==thread_a,
+        "dispatch process A thread first");
+    kernel::ThreadRunReport report{};
+    expect(runtime.run_current(2U,report,&error)&&report.instructions_executed==2U,
+        "execute process A thread from its private address space");
+    kernel::ThreadInfo info_a{},info_b{};
+    expect(runtime.get_thread(thread_a,info_a)&&info_a.context.x[0]==50U,
+        "process A thread receives only its own instruction results");
+    expect(runtime.block_current(0xAAU,scheduled,&error)&&scheduled==thread_b,
+        "block process A and dispatch process B");
+    expect(runtime.run_current(2U,report,&error)&&report.instructions_executed==2U,
+        "execute process B thread using the same virtual PC in another address space");
+    expect(runtime.get_thread(thread_b,info_b)&&info_b.context.x[0]==9U,
+        "process B executes its independent instruction bytes");
+    expect(runtime.get_thread(thread_a,info_a)&&info_a.context.x[0]==50U,
+        "process B execution does not overwrite process A CPU state");
+    expect(runtime.process_memory_bytes(process_a)==0x1000U&&
+           runtime.process_memory_bytes(process_b)==0x1000U,
+        "track per-process mapped memory usage");
+    expect(runtime.protect_process_region(process_b,0x1000U,0x1000U,
+        core::MemoryPermission::Read|core::MemoryPermission::Execute,&error),
+        "apply process-local executable read-only permissions");
+    expect(!runtime.write_process_memory(process_b,0x1000U,bytes_b,&error),
+        "reject writes after a process memory region becomes read-only");
+    expect(runtime.terminate_process(process_b,&error),
+        "terminate a process and release its private address space");
+    expect(!runtime.read_process_memory(process_b,0x1000U,read_b,&error)&&
+           runtime.process_memory_bytes(process_b)==0U,
+        "prevent access to memory after process termination");
+    expect(runtime.read_process_memory(process_a,0x1000U,read_a,&error)&&
+           read_a==bytes_a,"preserve process A memory after process B exits");
+}
+
 void test_scheduled_threads_execute_a64_code() {
     using namespace lucid;
     core::MemoryBus memory;
@@ -283,6 +352,7 @@ int main() {
     test_process_owned_handles();
     test_event_semaphore_and_mutex_primitives();
     test_scheduled_threads_execute_a64_code();
+    test_process_address_space_isolation_and_execution();
     if (failures != 0) {
         std::cerr << failures << " kernel runtime test(s) failed.\n";
         return 1;

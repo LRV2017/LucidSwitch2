@@ -48,7 +48,7 @@ constexpr std::array<CompatibilityFeature, 18U> kCommonFeatures{{
     {"System", "EL0 SVC dispatch subset", ImplementationStatus::Partial,
      "Implements SVC 0x10 current-processor query and SVC 0x1E deterministic virtual-tick query. Other calls still enter the guest vector path."},
     {"System", "Cooperative process/thread scheduler and handle table", ImplementationStatus::Partial,
-     "A bounded host-side substrate supports process/thread lifecycle, priority scheduling, A64 execution through the cached interpreter, wait/wake, manual/auto-reset events, counting semaphores, recursive mutexes, and per-process typed handles; it remains a cooperative single-address-space model, not Horizon-compatible."},
+     "A bounded host-side substrate supports process/thread lifecycle, priority scheduling, separate per-process checked memory maps and A64 execution through process-local cached interpreters, wait/wake, manual/auto-reset events, counting semaphores, recursive mutexes, and process-owned typed handles; it remains a cooperative model, not Horizon-compatible."},
     {"IPC", "HIPC/CMIF raw-only framing and command registry", ImplementationStatus::Partial,
      "Bounds-checked HIPC headers, aligned SFCI/SFCO messages, and a host command registry are supported; handles, descriptors, domains, and Horizon services are not."},
     {"System", "Horizon service implementations", ImplementationStatus::NotImplemented,
