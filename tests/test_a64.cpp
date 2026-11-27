@@ -887,7 +887,7 @@ int main() {
 
     // DMB/DSB/ISB complete as sequencing points in this synchronous
     // interpreter: memory writes are immediate and each step fetches anew.
-    constexpr std::uint64_t barrier_code = base + 0xE0U;
+    constexpr std::uint64_t barrier_code = exclusive_code + 0x20U;
     write32(exclusive_memory, barrier_code + 0x00U, 0xD5033FBFU); // DMB SY
     write32(exclusive_memory, barrier_code + 0x04U, 0xD5033F9FU); // DSB SY
     write32(exclusive_memory, barrier_code + 0x08U, 0xD5033FDFU); // ISB SY
