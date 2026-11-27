@@ -40,6 +40,7 @@ add_library(lucid_core
     src/devices/virtual_timer.cpp
     src/devices/device_bus.cpp
     src/gpu/guest_memory.cpp
+    src/gpu/gpu_address_space.cpp
     src/gpu/command_processor.cpp
     src/gpu/software_backend.cpp
     src/gpu/vulkan_backend.cpp

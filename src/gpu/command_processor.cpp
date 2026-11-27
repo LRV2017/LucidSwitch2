@@ -36,7 +36,7 @@ std::uint64_t load_u64_words(const std::uint32_t low,
            (static_cast<std::uint64_t>(high) << 32U);
 }
 
-bool read_u32_array(const GuestGpuMemory& memory, const std::uint64_t address,
+bool read_u32_array(const GpuMemoryView& memory, const std::uint64_t address,
                     const std::size_t count, std::vector<std::uint32_t>& output) {
     if (count > std::numeric_limits<std::size_t>::max() / 4U) return false;
     std::vector<std::uint8_t> bytes(count * 4U);
@@ -49,7 +49,7 @@ bool read_u32_array(const GuestGpuMemory& memory, const std::uint64_t address,
 
 } // namespace
 
-bool GpuCommandProcessor::submit(const GuestGpuMemory& memory,
+bool GpuCommandProcessor::submit(const GpuMemoryView& memory,
                                  const std::uint64_t guest_address,
                                  const std::size_t byte_length,
                                  GraphicsBackend& backend,

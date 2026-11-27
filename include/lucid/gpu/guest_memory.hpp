@@ -7,18 +7,26 @@
 
 namespace lucid::gpu {
 
+class GpuMemoryView {
+public:
+    virtual ~GpuMemoryView() = default;
+    [[nodiscard]] virtual bool valid() const = 0;
+    [[nodiscard]] virtual bool read(std::uint64_t address,
+                                    std::span<std::uint8_t> output) const = 0;
+};
+
 // A bounded, guest-visible GPU address range. The first implementation uses
 // host-backed storage; it is not a console's physical VRAM implementation.
-class GuestGpuMemory final {
+class GuestGpuMemory final : public GpuMemoryView {
 public:
     GuestGpuMemory(std::uint64_t guest_base, std::size_t size);
 
-    [[nodiscard]] bool valid() const noexcept;
+    [[nodiscard]] bool valid() const noexcept override;
     [[nodiscard]] std::uint64_t guest_base() const noexcept;
     [[nodiscard]] std::size_t size() const noexcept;
 
     [[nodiscard]] bool read(std::uint64_t address,
-                            std::span<std::uint8_t> output) const noexcept;
+                            std::span<std::uint8_t> output) const noexcept override;
     [[nodiscard]] bool write(std::uint64_t address,
                              std::span<const std::uint8_t> input) noexcept;
     [[nodiscard]] bool fill(std::uint64_t address, std::size_t length,
