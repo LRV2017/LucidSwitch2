@@ -3,6 +3,8 @@
 #include <limits>
 #include <new>
 #include <stdexcept>
+#include <mutex>
+#include <shared_mutex>
 #include <utility>
 namespace lucid::core {
 namespace {
@@ -32,6 +34,7 @@ bool MemoryBus::map_region(std::uint64_t base, std::size_t size,
         return false;
     }
     const std::uint64_t end = base + size64;
+    std::unique_lock lock(mutex_);
     for (const Region& region : regions_) {
         const auto existing_size = static_cast<std::uint64_t>(region.bytes.size());
         const std::uint64_t existing_end = region.base + existing_size;
@@ -77,6 +80,7 @@ bool MemoryBus::read_with_permission(std::uint64_t address,
     std::span<std::uint8_t> output, MemoryPermission permission,
     std::string* error) const {
     if (output.empty()) return true;
+    std::shared_lock lock(mutex_);
     const Region* region = find_region(address);
     if (region == nullptr) {
         set_error(error, "The requested address is not mapped.");
@@ -109,6 +113,7 @@ bool MemoryBus::read_instruction(std::uint64_t address,
 bool MemoryBus::write(std::uint64_t address, std::span<const std::uint8_t> input,
                       std::string* error) {
     if (input.empty()) return true;
+    std::unique_lock lock(mutex_);
     Region* region = find_region(address);
     if (region == nullptr) {
         set_error(error, "The requested address is not mapped.");
@@ -146,6 +151,7 @@ bool MemoryBus::read_exclusive(const std::uint64_t address,
         return false;
     }
     const Region* region = find_region(address);
+    std::shared_lock lock(mutex_);
     if (region == nullptr || !has_permission(region->permissions, MemoryPermission::Read)) {
         set_error(error, "The exclusive-load address is unmapped or unreadable.");
         return false;
@@ -156,8 +162,8 @@ bool MemoryBus::read_exclusive(const std::uint64_t address,
         set_error(error, "The exclusive load crosses a mapped-region boundary.");
         return false;
     }
-    if (!read_with_permission(address, output, MemoryPermission::Read, error))
-        return false;
+    std::copy_n(region->bytes.begin() + static_cast<std::ptrdiff_t>(offset),
+                output.size(), output.begin());
     version = region->exclusive_versions[offset / ExclusiveGranuleBytes];
     return true;
 }
@@ -172,6 +178,7 @@ bool MemoryBus::write_exclusive(const std::uint64_t address,
         return false;
     }
     Region* region = find_region(address);
+    std::unique_lock lock(mutex_);
     if (region == nullptr || !has_permission(region->permissions, MemoryPermission::Write)) {
         set_error(error, "The exclusive-store address is unmapped or unwritable.");
         return false;
@@ -197,6 +204,7 @@ bool MemoryBus::write_exclusive(const std::uint64_t address,
 bool MemoryBus::can_access(std::uint64_t address, std::size_t size,
                             MemoryPermission permission) const noexcept {
     if (size == 0U) return true;
+    std::shared_lock lock(mutex_);
     const Region* region = find_region(address);
     if (region == nullptr || !has_permission(region->permissions, permission)) {
         return false;
@@ -213,5 +221,8 @@ bool MemoryBus::write8(std::uint64_t address, std::uint8_t value,
                        std::string* error) {
     return write(address, std::span<const std::uint8_t>(&value, 1U), error);
 }
-std::size_t MemoryBus::region_count() const noexcept { return regions_.size(); }
+std::size_t MemoryBus::region_count() const {
+    std::shared_lock lock(mutex_);
+    return regions_.size();
+}
 } // namespace lucid::core

@@ -94,6 +94,53 @@ void test_eight_independent_core_contexts() {
            "return no context for an invalid core index");
 }
 
+void test_parallel_execution_and_shared_memory() {
+    using namespace lucid;
+    constexpr std::uint64_t code_base = 0x10000U;
+    constexpr std::uint64_t shared_word = 0x8000U;
+    core::MemoryBus memory;
+    std::string error;
+    expect(memory.map_region(code_base, 0x1000U, &error),
+           "map parallel-core instruction memory");
+    expect(memory.map_region(shared_word, 0x100U, &error),
+           "map shared word for parallel-core writers");
+    switch2::CpuCluster cluster;
+    for (std::size_t core = 0U; core < switch2::CpuCluster::CoreCount; ++core) {
+        const std::uint16_t value = static_cast<std::uint16_t>(0x100U + core);
+        const std::array<std::uint32_t, 3U> words{
+            0xD2800000U | (static_cast<std::uint32_t>(value) << 5U),
+            0xD2800001U | (static_cast<std::uint32_t>(shared_word) << 5U),
+            0xF9000020U // STR X0,[X1]
+        };
+        std::array<std::uint8_t, 12U> program{};
+        for (std::size_t word = 0U; word < words.size(); ++word)
+            for (std::size_t byte = 0U; byte < 4U; ++byte)
+                program[word * 4U + byte] = static_cast<std::uint8_t>(
+                    (words[word] >> (byte * 8U)) & 0xFFU);
+        const std::uint64_t entry = code_base +
+            static_cast<std::uint64_t>(core) * 0x20U;
+        expect(memory.write(entry, program, &error), "write per-core instruction stream");
+        expect(cluster.start_core(core, entry), "start core for parallel memory test");
+    }
+    const auto report = cluster.run_parallel(memory, 3U);
+    expect(report.instructions_executed == switch2::CpuCluster::CoreCount * 3U,
+           "execute a bounded budget concurrently on all eight cores");
+    expect(report.runnable_cores == 0U && report.faulted_cores == 0U,
+           "parallel workers finish without guest faults");
+    for (std::size_t core = 0U; core < switch2::CpuCluster::CoreCount; ++core) {
+        const auto* context = cluster.context(core);
+        expect(context != nullptr && context->instructions_retired == 3U,
+               "each parallel core retires its complete instruction budget");
+    }
+    std::array<std::uint8_t, 8U> bytes{};
+    expect(memory.read(shared_word, bytes), "read memory after all workers have joined");
+    std::uint64_t final_value = 0U;
+    for (std::size_t byte = 0U; byte < bytes.size(); ++byte)
+        final_value |= static_cast<std::uint64_t>(bytes[byte]) << (byte * 8U);
+    expect(final_value >= 0x100U && final_value <= 0x107U,
+           "shared physical memory contains one complete writer value");
+}
+
 void test_fault_isolation() {
     using namespace lucid;
     constexpr std::uint64_t base = 0x8000U;
@@ -131,6 +178,7 @@ void test_fault_isolation() {
 int main() {
     test_eight_independent_core_contexts();
     test_fault_isolation();
+    test_parallel_execution_and_shared_memory();
     if (failures != 0) {
         std::cerr << failures << " Switch 2 CPU cluster test(s) failed.\n";
         return 1;

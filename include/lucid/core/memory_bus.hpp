@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <shared_mutex>
 #include <string>
 #include <vector>
 namespace lucid::core {
@@ -29,9 +30,9 @@ public:
     [[nodiscard]] bool write(std::uint64_t address,
         std::span<const std::uint8_t> input, std::string* error = nullptr);
 
-    // Exclusive accesses use a documented 16-byte reservation granule. These
-    // operations are atomic relative to this bus's sequential guest execution;
-    // the bus is not currently safe for simultaneous host-thread access.
+    // Exclusive accesses use a documented 16-byte reservation granule.
+    // Mapping, data, and reservation operations are synchronized for
+    // concurrent host-thread guest-core execution.
     [[nodiscard]] bool read_exclusive(std::uint64_t address,
         std::span<std::uint8_t> output, std::uint64_t& version,
         std::string* error = nullptr) const;
@@ -39,12 +40,12 @@ public:
         std::span<const std::uint8_t> input, std::uint64_t expected_version,
         bool& stored, std::string* error = nullptr);
     [[nodiscard]] bool can_access(std::uint64_t address, std::size_t size,
-        MemoryPermission permission) const noexcept;
+        MemoryPermission permission) const;
     [[nodiscard]] bool read8(std::uint64_t address, std::uint8_t& value,
         std::string* error = nullptr) const;
     [[nodiscard]] bool write8(std::uint64_t address, std::uint8_t value,
         std::string* error = nullptr);
-    [[nodiscard]] std::size_t region_count() const noexcept;
+    [[nodiscard]] std::size_t region_count() const;
 private:
     struct Region {
         std::uint64_t base{};
@@ -57,6 +58,7 @@ private:
     [[nodiscard]] bool read_with_permission(std::uint64_t address,
         std::span<std::uint8_t> output, MemoryPermission permission,
         std::string* error) const;
+    mutable std::shared_mutex mutex_;
     std::vector<Region> regions_;
 };
 } // namespace lucid::core

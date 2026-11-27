@@ -1,9 +1,11 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(LucidSwitch2 VERSION 0.22.0
+project(LucidSwitch2 VERSION 0.23.0
     DESCRIPTION "Clean-room console emulation research scaffold"
     LANGUAGES CXX
 )
+
+find_package(Threads REQUIRED)
 
 option(LUCID_BUILD_TESTS "Build the LucidSwitch2 test suite" ON)
 option(LUCID_ENABLE_VULKAN "Enable the optional Vulkan backend when the SDK is available" ON)
@@ -50,6 +52,7 @@ add_library(lucid_core
 target_include_directories(lucid_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_compile_features(lucid_core PUBLIC cxx_std_20)
+target_link_libraries(lucid_core PUBLIC Threads::Threads)
 
 if(LUCID_ENABLE_VULKAN AND Vulkan_FOUND)
     set(LUCID_HAS_VULKAN_VALUE 1)

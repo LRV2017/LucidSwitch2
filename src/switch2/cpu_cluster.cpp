@@ -1,5 +1,8 @@
 #include "lucid/switch2/cpu_cluster.hpp"
 
+#include <thread>
+#include <vector>
+
 namespace lucid::switch2 {
 
 bool CpuCluster::start_core(const std::size_t core_index,
@@ -42,6 +45,41 @@ bool CpuCluster::step(const std::size_t core_index,
             break;
     }
     return true;
+}
+
+CpuClusterRunReport CpuCluster::run_parallel(
+    core::MemoryBus& memory,
+    const std::uint64_t per_core_instruction_budget) {
+    std::array<std::uint64_t, CoreCount> retired_before{};
+    std::vector<std::jthread> workers;
+    workers.reserve(CoreCount);
+
+    for (std::size_t index = 0U; index < CoreCount; ++index) {
+        if (cores_[index].state != CpuCoreState::Runnable) continue;
+        retired_before[index] = cores_[index].context.instructions_retired;
+        workers.emplace_back([this, &memory, index, per_core_instruction_budget] {
+            for (std::uint64_t quantum = 0U;
+                 quantum < per_core_instruction_budget &&
+                 cores_[index].state == CpuCoreState::Runnable;
+                 ++quantum) {
+                cpu::StepResult result = cpu::StepResult::Executed;
+                if (!step(index, memory, result)) break;
+            }
+        });
+    }
+
+    for (std::jthread& worker : workers) worker.join();
+
+    CpuClusterRunReport report{};
+    for (std::size_t index = 0U; index < CoreCount; ++index) {
+        report.instructions_executed +=
+            cores_[index].context.instructions_retired - retired_before[index];
+    }
+    report.runnable_cores = count_state(CpuCoreState::Runnable);
+    report.halted_cores = count_state(CpuCoreState::Halted);
+    report.faulted_cores = count_state(CpuCoreState::Faulted);
+    report.next_core = next_core_;
+    return report;
 }
 
 CpuClusterRunReport CpuCluster::run_round_robin(

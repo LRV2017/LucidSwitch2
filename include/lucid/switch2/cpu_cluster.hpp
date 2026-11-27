@@ -25,8 +25,8 @@ struct CpuClusterRunReport {
 };
 
 // Switch 2 target CPU topology experiment. Each core has independent
-// architectural state, but all cores execute deterministically on the host
-// thread and share the supplied checked guest memory bus.
+// architectural state. A deterministic runner supports repeatable tests;
+// run_parallel uses host workers and synchronized shared guest memory.
 class CpuCluster final {
 public:
     static constexpr std::size_t CoreCount = 8U;
@@ -51,6 +51,12 @@ public:
     [[nodiscard]] CpuClusterRunReport run_round_robin(
         core::MemoryBus& memory,
         std::uint64_t instruction_budget);
+
+    // Execute up to this many instructions on each core that is runnable
+    // when the call begins. Worker interleaving is intentionally nondeterministic.
+    [[nodiscard]] CpuClusterRunReport run_parallel(
+        core::MemoryBus& memory,
+        std::uint64_t per_core_instruction_budget);
 
     [[nodiscard]] const cpu::CpuContext* context(
         std::size_t core_index) const noexcept;
