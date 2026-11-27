@@ -126,6 +126,45 @@ bool Runtime::schedule_next(
     return dispatch_ready(thread_id);
 }
 
+bool Runtime::run_current(core::MemoryBus& memory,
+    const std::uint64_t instruction_budget, ThreadRunReport& report,
+    std::string* error) {
+    report = {};
+    if (current_thread_id_ == 0U || instruction_budget == 0U) {
+        set_error(error, "Running a guest thread requires a scheduled thread and a nonzero instruction budget.");
+        return false;
+    }
+    const auto found = threads_.find(current_thread_id_);
+    if (found == threads_.end() || found->second.state != ThreadState::Running ||
+        !process_is_active(found->second.process_id)) {
+        set_error(error, "The current guest-thread state is invalid.");
+        return false;
+    }
+
+    const cpu::A64BlockRunReport execution = execution_cache_.run(
+        found->second.context, memory, instruction_budget);
+    report.instructions_executed = execution.instructions_executed;
+    report.stop_reason = execution.stop_reason;
+    report.instruction_budget_exhausted = execution.instruction_budget_exhausted;
+    found->second.last_step_result = execution.stop_reason;
+
+    if (execution.stop_reason == cpu::StepResult::Halted) {
+        found->second.state = ThreadState::Terminated;
+        found->second.wait_key = 0U;
+        current_thread_id_ = 0U;
+        release_owned_mutexes(found->second.id);
+    } else if (execution.stop_reason == cpu::StepResult::UnsupportedInstruction ||
+               execution.stop_reason == cpu::StepResult::MemoryFault ||
+               execution.stop_reason == cpu::StepResult::MisalignedProgramCounter ||
+               execution.stop_reason == cpu::StepResult::SystemRegisterFault) {
+        found->second.state = ThreadState::Faulted;
+        found->second.wait_key = 0U;
+        current_thread_id_ = 0U;
+        release_owned_mutexes(found->second.id);
+    }
+    return true;
+}
+
 bool Runtime::yield_current(
     std::uint32_t& next_thread_id, std::string* error) {
     if (current_thread_id_ == 0U) {
@@ -161,7 +200,8 @@ bool Runtime::wake_one_waiter(const std::uint64_t wait_key,
     ThreadInfo* selected = nullptr;
     for (auto& [id, thread] : threads_) {
         (void)id;
-        if (thread.state != ThreadState::Blocked || thread.wait_key != wait_key)
+        if (thread.state != ThreadState::Blocked || thread.wait_key != wait_key ||
+            !process_is_active(thread.process_id))
             continue;
         if (selected == nullptr ||
             thread.priority < selected->priority ||
@@ -180,7 +220,7 @@ std::size_t Runtime::wake_waiters(const std::uint64_t wait_key) {
     for (auto& [id, thread] : threads_) {
         (void)id;
         if (thread.state != ThreadState::Blocked ||
-            thread.wait_key != wait_key) continue;
+            thread.wait_key != wait_key || !process_is_active(thread.process_id)) continue;
         if (!enqueue_ready(thread, nullptr)) break;
         ++awakened;
     }
@@ -201,7 +241,9 @@ bool Runtime::terminate_current(
     }
     current->second.state = ThreadState::Terminated;
     current->second.wait_key = 0U;
+    const std::uint32_t terminated_thread_id = current->second.id;
     current_thread_id_ = 0U;
+    release_owned_mutexes(terminated_thread_id);
     return dispatch_ready(next_thread_id);
 }
 
@@ -220,6 +262,9 @@ bool Runtime::terminate_process(
         if (thread.id == current_thread_id_) current_thread_id_ = 0U;
         thread.state = ThreadState::Terminated;
         thread.wait_key = 0U;
+    }
+    for (const auto& [id, thread] : threads_) {
+        if (thread.process_id == process_id) release_owned_mutexes(id);
     }
     for (auto handle = handles_.begin(); handle != handles_.end();) {
         if (handle->second.owner_process == process_id)
@@ -320,6 +365,17 @@ Runtime::SyncObject* Runtime::find_sync_object(
         return nullptr;
     const auto found = sync_objects_.find(object_id);
     return found == sync_objects_.end() ? nullptr : &found->second;
+}
+
+void Runtime::release_owned_mutexes(const std::uint32_t thread_id) noexcept {
+    for (auto& [object_id, object] : sync_objects_) {
+        if (object.type != KernelObjectType::Mutex ||
+            object.owner_thread != thread_id) continue;
+        object.owner_thread = 0U;
+        object.recursion_depth = 0U;
+        std::uint32_t awakened = 0U;
+        (void)wake_one_waiter(object_id, awakened);
+    }
 }
 
 void Runtime::prune_sync_objects() noexcept {
@@ -520,11 +576,10 @@ bool Runtime::unlock_mutex(const std::uint32_t owner_process,
     --object->recursion_depth;
     if (object->recursion_depth == 0U) {
         object->owner_thread = 0U;
-        (void)wake_waiters(object_id);
+        std::uint32_t awakened = 0U;
+        (void)wake_one_waiter(object_id, awakened);
     }
     return true;
 }
-
-
 
 } // namespace lucid::kernel

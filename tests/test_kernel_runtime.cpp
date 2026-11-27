@@ -121,6 +121,68 @@ void test_process_owned_handles() {
                                   handle, &error),
            "prevent thread creation in a terminated process");
 }
+void test_scheduled_threads_execute_a64_code() {
+    using namespace lucid;
+    core::MemoryBus memory;
+    std::string error;
+    expect(memory.map_region(0x1000U,0x1000U,&error,
+        core::MemoryPermission::ReadWriteExecute),
+        "map executable memory for guest-thread execution");
+    const std::array<std::uint32_t,3U> code{
+        0xD2800540U, // MOVZ X0,#42
+        0x91002000U, // ADD X0,X0,#8
+        0x14000000U  // B .
+    };
+    std::array<std::uint8_t,12U> bytes{};
+    for(std::size_t i=0U;i<code.size();++i)
+        for(std::size_t b=0U;b<4U;++b)
+            bytes[i*4U+b]=static_cast<std::uint8_t>((code[i]>>(b*8U))&0xFFU);
+    expect(memory.write(0x1000U,bytes,&error),"write scheduled guest-thread A64 program");
+
+    kernel::Runtime runtime;
+    std::uint32_t process=0U,thread=0U,scheduled=0U;
+    expect(runtime.create_process("a64-thread",process,&error),
+        "create process for executable guest-thread test");
+    expect(runtime.create_thread(process,0x1000U,0x8000U,8U,0U,thread,&error),
+        "create a scheduled A64 guest thread");
+    expect(runtime.schedule_next(scheduled,&error)&&scheduled==thread,
+        "dispatch the A64 guest thread");
+    kernel::ThreadRunReport report{};
+    expect(runtime.run_current(memory,2U,report,&error),
+        "execute the scheduled thread through the cached A64 interpreter");
+    kernel::ThreadInfo info{};
+    expect(runtime.get_thread(thread,info)&&info.state==kernel::ThreadState::Running&&
+           info.context.x[0]==50U&&info.context.program_counter==0x1008U,
+        "preserve CPU registers and PC after a bounded guest-thread run");
+    expect(report.instructions_executed==2U&&report.instruction_budget_exhausted,
+        "report a clean instruction-budget stop");
+    expect(runtime.run_current(memory,3U,report,&error)&&
+           report.instructions_executed==3U&&report.instruction_budget_exhausted,
+        "resume the same running guest thread across a second budget");
+
+    core::MemoryBus fault_memory;
+    expect(fault_memory.map_region(0x3000U,0x1000U,&error),
+        "map guest memory for unsupported-instruction fault test");
+    const std::array<std::uint8_t,4U> bad{0xFFU,0xFFU,0xFFU,0xFFU};
+    expect(fault_memory.write(0x3000U,bad,&error),
+        "write unsupported A64 instruction for fault test");
+    kernel::Runtime fault_runtime;
+    std::uint32_t fault_process=0U,fault_thread=0U;
+    expect(fault_runtime.create_process("fault-test",fault_process,&error)&&
+           fault_runtime.create_thread(fault_process,0x3000U,0x9000U,1U,0U,
+                                        fault_thread,&error)&&
+           fault_runtime.schedule_next(scheduled,&error)&&scheduled==fault_thread,
+        "create and dispatch a guest thread with unsupported code");
+    expect(fault_runtime.run_current(fault_memory,1U,report,&error),
+        "execute unsupported guest-thread instruction and report its fault");
+    expect(report.stop_reason==cpu::StepResult::UnsupportedInstruction,
+        "preserve the unsupported-instruction stop reason");
+    expect(fault_runtime.get_thread(fault_thread,info)&&
+           info.state==kernel::ThreadState::Faulted&&
+           fault_runtime.current_thread_id()==0U,
+        "faulted guest thread leaves the running slot without corrupting the scheduler");
+}
+
 void test_event_semaphore_and_mutex_primitives() {
     lucid::kernel::Runtime runtime;
     std::uint32_t process=0U, thread_a=0U, thread_b=0U, next=0U;
@@ -218,6 +280,7 @@ int main() {
     test_priority_scheduling_and_waits();
     test_process_owned_handles();
     test_event_semaphore_and_mutex_primitives();
+    test_scheduled_threads_execute_a64_code();
     if (failures != 0) {
         std::cerr << failures << " kernel runtime test(s) failed.\n";
         return 1;

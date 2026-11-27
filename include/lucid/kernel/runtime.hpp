@@ -1,6 +1,6 @@
 #pragma once
 
-#include "lucid/cpu/cpu_backend.hpp"
+#include "lucid/cpu/block_cache.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -14,7 +14,7 @@ inline constexpr std::size_t MaximumThreads = 256U;
 inline constexpr std::size_t MaximumHandles = 4096U;
 
 enum class ProcessState { Active, Terminated };
-enum class ThreadState { Ready, Running, Blocked, Terminated };
+enum class ThreadState { Ready, Running, Blocked, Terminated, Faulted };
 enum class KernelObjectType { Event, Mutex, Semaphore, Session, TransferMemory };
 
 struct ProcessInfo {
@@ -31,9 +31,16 @@ struct ThreadInfo {
     std::uint8_t priority{32U};
     std::uint64_t wait_key{};
     std::uint64_t ready_order{};
+    cpu::StepResult last_step_result{cpu::StepResult::Executed};
 };
 
 enum class KernelSyncStatus { Signaled, WouldBlock, InvalidHandle };
+
+struct ThreadRunReport {
+    std::uint64_t instructions_executed{};
+    cpu::StepResult stop_reason{cpu::StepResult::Executed};
+    bool instruction_budget_exhausted{};
+};
 
 struct HandleInfo {
     std::uint32_t value{};
@@ -60,6 +67,11 @@ public:
         std::uint32_t& thread_id, std::string* error = nullptr);
     [[nodiscard]] bool yield_current(
         std::uint32_t& next_thread_id, std::string* error = nullptr);
+    // Execute the currently scheduled thread against shared guest memory.
+    // A budget stop leaves it Running; CPU faults/halt update its lifecycle.
+    [[nodiscard]] bool run_current(core::MemoryBus& memory,
+        std::uint64_t instruction_budget, ThreadRunReport& report,
+        std::string* error = nullptr);
     [[nodiscard]] bool block_current(
         std::uint64_t wait_key, std::uint32_t& next_thread_id,
         std::string* error = nullptr);
@@ -125,6 +137,7 @@ private:
     [[nodiscard]] bool dispatch_ready(std::uint32_t& thread_id);
     [[nodiscard]] std::uint64_t allocate_sync_object_id() noexcept;
     void prune_sync_objects() noexcept;
+    void release_owned_mutexes(std::uint32_t thread_id) noexcept;
 
     struct SyncObject {
         KernelObjectType type{KernelObjectType::Event};
@@ -144,6 +157,7 @@ private:
     std::map<std::uint32_t, ThreadInfo> threads_;
     std::map<std::uint32_t, HandleInfo> handles_;
     std::map<std::uint64_t, SyncObject> sync_objects_;
+    cpu::A64BlockCache execution_cache_;
     std::uint32_t next_process_id_{1U};
     std::uint32_t next_thread_id_{1U};
     std::uint32_t next_handle_{0x100U};
