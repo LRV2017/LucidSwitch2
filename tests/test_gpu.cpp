@@ -95,6 +95,36 @@ void test_gpu_virtual_address_space() {
     expect(gpu_memory.mapping_count()==1U,"preserve other GPU mappings after unmap");
 }
 
+void test_command_processor_reads_gpu_virtual_memory() {
+    using namespace lucid;
+    constexpr std::uint64_t physical_base=0x600000U;
+    constexpr std::uint64_t gpu_base=0x30000000U;
+    core::MemoryBus physical;
+    std::string error;
+    expect(physical.map_region(physical_base,0x2000U,&error,
+        core::MemoryPermission::ReadWrite),"map shared memory for GPU command submission");
+    gpu::GpuAddressSpace gpu_memory(physical);
+    expect(gpu_memory.map(gpu_base,physical_base,0x2000U,
+        core::MemoryPermission::ReadWrite,&error),"map GPU command and resource memory");
+    std::vector<std::uint8_t> stream;
+    packet(stream,gpu::GpuOpcode::BeginFrame,{2U,2U});
+    packet(stream,gpu::GpuOpcode::Clear,{0x123456FFU});
+    packet(stream,gpu::GpuOpcode::Present);
+    packet(stream,gpu::GpuOpcode::End);
+    expect(gpu_memory.write(gpu_base,stream),"write command stream through GPU virtual address");
+    gpu::SoftwareBackend renderer;
+    expect(renderer.initialize(&error),"initialize renderer for mapped GPU command stream");
+    gpu::GpuCommandProcessor processor;
+    expect(processor.submit(gpu_memory,gpu_base,stream.size(),renderer,&error),
+        "submit command processor stream from sparse GPU address-space memory");
+    expect(processor.stats().submissions==1U&&processor.stats().frames_presented==1U,
+        "complete a GPU frame sourced through GPU virtual memory");
+    std::array<std::uint32_t,4U> pixels{};
+    expect(renderer.readback(pixels,&error)&&
+        pixels[0]==0x123456FFU&&pixels[3]==0x123456FFU,
+        "verify mapped GPU virtual memory data reached the render backend");
+}
+
 void test_command_processor_and_software_renderer() {
     using namespace lucid::gpu;
     GuestGpuMemory memory(0x100000U, 4096U);
@@ -414,6 +444,7 @@ void test_native_vulkan_rendering() {
 int main() {
     test_guest_memory();
     test_gpu_virtual_address_space();
+    test_command_processor_reads_gpu_virtual_memory();
     test_command_processor_and_software_renderer();
     test_invalid_streams_are_rejected_before_execution();
     test_indexed_geometry_texture_and_depth();
