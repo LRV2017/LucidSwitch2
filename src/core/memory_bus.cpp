@@ -202,7 +202,7 @@ bool MemoryBus::write_exclusive(const std::uint64_t address,
 }
 
 bool MemoryBus::can_access(std::uint64_t address, std::size_t size,
-                            MemoryPermission permission) const noexcept {
+                            MemoryPermission permission) const {
     if (size == 0U) return true;
     std::shared_lock lock(mutex_);
     const Region* region = find_region(address);
