@@ -257,6 +257,54 @@ bool MemoryBus::atomic_rmw(const std::uint64_t address,
     return true;
 }
 
+bool MemoryBus::atomic_compare_exchange(const std::uint64_t address,
+    const std::size_t size,const std::uint64_t expected,
+    const std::uint64_t desired,std::uint64_t& previous_value,
+    bool& exchanged,std::string* error){
+    previous_value=0U;
+    exchanged=false;
+    if((size!=1U&&size!=2U&&size!=4U&&size!=8U)||(address%size)!=0U){
+        set_error(error,"Atomic compare-and-swap requires an aligned 1, 2, 4, or 8-byte operand.");
+        return false;
+    }
+    std::unique_lock lock(mutex_);
+    Region* region=find_region(address);
+    if(region==nullptr||
+       !has_permission(region->permissions,MemoryPermission::Read)||
+       !has_permission(region->permissions,MemoryPermission::Write)){
+        set_error(error,"The compare-and-swap address is unmapped or lacks read/write permission.");
+        return false;
+    }
+    const std::size_t offset=static_cast<std::size_t>(address-region->base);
+    if(offset>region->bytes.size()||size>region->bytes.size()-offset){
+        set_error(error,"The compare-and-swap operand crosses the end of a mapped region.");
+        return false;
+    }
+    std::uint64_t old_value=0U;
+    for(std::size_t byte=0U;byte<size;++byte)
+        old_value|=static_cast<std::uint64_t>(region->bytes[offset+byte])<<(byte*8U);
+    const std::uint64_t mask=size==8U
+        ? std::numeric_limits<std::uint64_t>::max()
+        : ((std::uint64_t{1}<<(size*8U))-1U);
+    old_value&=mask;
+    previous_value=old_value;
+    if(old_value!=(expected&mask))return true;
+
+    const std::uint64_t replacement=desired&mask;
+    for(std::size_t byte=0U;byte<size;++byte)
+        region->bytes[offset+byte]=static_cast<std::uint8_t>(
+            (replacement>>(byte*8U))&0xFFU);
+    const std::size_t first_granule=offset/ExclusiveGranuleBytes;
+    const std::size_t last_granule=(offset+size-1U)/ExclusiveGranuleBytes;
+    for(std::size_t index=first_granule;index<=last_granule;++index){
+        ++region->exclusive_versions[index];
+        if(region->exclusive_versions[index]==0U)++region->exclusive_versions[index];
+    }
+    bump_generation(*region);
+    exchanged=true;
+    return true;
+}
+
 bool MemoryBus::read_exclusive(const std::uint64_t address,
     const std::span<std::uint8_t> output, std::uint64_t& version,
     std::string* error) const {

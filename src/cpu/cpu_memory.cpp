@@ -119,6 +119,26 @@ bool CpuMemory::atomic_rmw(const std::uint64_t address,
                                        operation,previous_value);
 }
 
+bool CpuMemory::atomic_compare_exchange(const std::uint64_t address,
+    const std::size_t size,const std::uint64_t expected,
+    const std::uint64_t desired,std::uint64_t& previous_value,bool& exchanged){
+    if(address_space_==nullptr&&stage1_mmu_==nullptr)
+        return physical_memory_.atomic_compare_exchange(address,size,expected,desired,
+                                                         previous_value,exchanged);
+    std::array<std::uint64_t,8> read_addresses{};
+    std::array<std::uint64_t,8> write_addresses{};
+    if(!translate_and_validate(address,size,mmu::AccessType::Read,
+            core::MemoryPermission::Read,read_addresses)||
+       !translate_and_validate(address,size,mmu::AccessType::Write,
+            core::MemoryPermission::Write,write_addresses))return false;
+    for(std::size_t index=0U;index<size;++index){
+        if(read_addresses[index]!=write_addresses[index])return false;
+        if(index!=0U&&read_addresses[index]!=read_addresses[0]+index)return false;
+    }
+    return physical_memory_.atomic_compare_exchange(read_addresses[0],size,
+        expected,desired,previous_value,exchanged);
+}
+
 bool CpuMemory::read_exclusive(const std::uint64_t address,
     const std::span<std::uint8_t> output, std::uint64_t& physical_address,
     std::uint64_t& version) const {

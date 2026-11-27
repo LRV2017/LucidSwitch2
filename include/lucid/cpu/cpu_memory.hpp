@@ -27,6 +27,9 @@ public:
     [[nodiscard]] bool atomic_rmw(std::uint64_t address, std::size_t size,
         std::uint64_t operand, core::AtomicOperation operation,
         std::uint64_t& previous_value);
+    [[nodiscard]] bool atomic_compare_exchange(std::uint64_t address,
+        std::size_t size, std::uint64_t expected, std::uint64_t desired,
+        std::uint64_t& previous_value, bool& exchanged);
     [[nodiscard]] bool read_exclusive(std::uint64_t address,
         std::span<std::uint8_t> output, std::uint64_t& physical_address,
         std::uint64_t& version) const;
