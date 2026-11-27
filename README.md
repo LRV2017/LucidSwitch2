@@ -14,6 +14,9 @@ An experimental, clean-room emulator research project focused on building a lawf
 
 ## Current foundation
 
+- Switch 2 static homebrew loader: accepts bounded ELF64 little-endian AArch64 `ET_EXEC` segments, validates ranges/alignments/entry point, zero-fills BSS, enforces W^X mappings, and rolls back mappings on load failure. It is not a Nintendo retail package loader.
+- Device I/O foundations: a synchronized eight-slot controller snapshot hub and a 16-channel signed-16-bit stereo PCM mixer with Q15 gain and saturation. No native device discovery or console DSP emulation is claimed yet.
+
 - C++20 / CMake project with cross-platform CI for Windows, Linux, and macOS.
 - Checked memory regions with read, write, and execute permissions.
 - CPU context with 31 general-purpose registers, 32 modeled 128-bit SIMD/FP registers, SP, PC, retired-instruction count, and NZCV flags.

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(LucidSwitch2 VERSION 0.23.0
+project(LucidSwitch2 VERSION 0.24.0
     DESCRIPTION "Clean-room console emulation research scaffold"
     LANGUAGES CXX
 )
@@ -34,6 +34,8 @@ add_library(lucid_core
     src/mmu/address_space.cpp
     src/mmu/stage1_mmu.cpp
     src/devices/interrupt_controller.cpp
+    src/devices/controller_hub.cpp
+    src/devices/audio_mixer.cpp
     src/devices/virtual_timer.cpp
     src/devices/device_bus.cpp
     src/gpu/guest_memory.cpp
@@ -149,6 +151,7 @@ if(LUCID_BUILD_TESTS)
         lucid_ipc_tests
         lucid_switch2_cpu_cluster_tests
         lucid_switch2_elf_loader_tests
+        lucid_device_io_tests
     )
 
     add_executable(lucid_tests tests/test_main.cpp)
@@ -165,6 +168,7 @@ if(LUCID_BUILD_TESTS)
     add_executable(lucid_ipc_tests tests/test_ipc.cpp)
     add_executable(lucid_switch2_cpu_cluster_tests tests/test_switch2_cpu_cluster.cpp)
     add_executable(lucid_switch2_elf_loader_tests tests/test_switch2_elf_loader.cpp)
+    add_executable(lucid_device_io_tests tests/test_device_io.cpp)
 
     foreach(test_target IN LISTS LUCID_TEST_TARGETS)
         target_link_libraries(${test_target} PRIVATE lucid_core)
@@ -191,4 +195,5 @@ if(LUCID_BUILD_TESTS)
     add_test(NAME lucid_ipc_tests COMMAND lucid_ipc_tests)
     add_test(NAME lucid_switch2_cpu_cluster_tests COMMAND lucid_switch2_cpu_cluster_tests)
     add_test(NAME lucid_switch2_elf_loader_tests COMMAND lucid_switch2_elf_loader_tests)
+    add_test(NAME lucid_device_io_tests COMMAND lucid_device_io_tests)
 endif()

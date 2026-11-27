@@ -30,7 +30,7 @@ constexpr HardwareProfile kSwitch2{
     "Nintendo confirms custom NVIDIA processor; T239-level detail is community reverse-engineered"
 };
 
-constexpr std::array<CompatibilityFeature, 14U> kCommonFeatures{{
+constexpr std::array<CompatibilityFeature, 16U> kCommonFeatures{{
     {"CPU", "AArch64 scalar integer interpreter", ImplementationStatus::Partial,
      "MOVN, ADR/ADRP, logical immediates, conditional selects, division, variable shifts, multiply-accumulate and linked branches are covered; the instruction set remains incomplete."},
     {"CPU", "Scalar S/D floating-point and FMOV", ImplementationStatus::Partial,
@@ -58,7 +58,11 @@ constexpr std::array<CompatibilityFeature, 14U> kCommonFeatures{{
     {"Graphics", "Host Vulkan renderer", ImplementationStatus::HostOnly,
      "Native host rendering exists for Lucid test geometry; it is not guest GPU compatibility."},
     {"Security", "Protected retail-content decryption and title launch", ImplementationStatus::NotImplemented,
-     "No protected-content decryption or retail-title launch path is implemented."}
+     "No protected-content decryption or retail-title launch path is implemented."},
+    {"Audio", "Host-neutral stereo PCM mixer", ImplementationStatus::Partial,
+     "A 16-channel, 48 kHz signed-16-bit stereo mixer supports bounded queues, Q15 gain, and saturated summation; no host output device or console DSP is connected."},
+    {"Input", "Host-neutral controller snapshot hub", ImplementationStatus::Partial,
+     "Up to eight synchronized button/axis/trigger snapshots are supported; physical discovery, motion, NFC, rumble and Horizon input services are not connected."}
 }};
 
 constexpr CompatibilityFeature kOriginalExecutableFeature{
