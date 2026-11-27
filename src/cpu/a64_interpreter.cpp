@@ -364,7 +364,7 @@ StepResult A64Interpreter::step_decoded(CpuContext& context, CpuMemory& memory,
 
     // LSE compare-and-swap pair (CASP/CASPA/CASPL/CASPAL). The
     // even-numbered register pairs contain expected and replacement values.
-    if ((instruction & 0x3F207C00U) == 0x08207C00U) {
+    if ((instruction & 0x3FA07C00U) == 0x08207C00U) {
         const unsigned size_encoding=(instruction>>30U)&1U;
         const std::size_t element_size=size_encoding!=0U?8U:4U;
         const std::size_t total_size=element_size*2U;
