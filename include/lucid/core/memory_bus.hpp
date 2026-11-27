@@ -6,6 +6,9 @@
 #include <string>
 #include <vector>
 namespace lucid::core {
+enum class AtomicOperation : std::uint8_t {
+    Add, Clear, Eor, Set, SignedMax, SignedMin, UnsignedMax, UnsignedMin, Swap
+};
 enum class MemoryPermission : std::uint8_t {
     None = 0, Read = 1U, Write = 2U, Execute = 4U,
     ReadWrite = 3U, ReadWriteExecute = 7U
@@ -33,6 +36,9 @@ public:
         std::span<std::uint8_t> output, std::string* error = nullptr) const;
     [[nodiscard]] bool write(std::uint64_t address,
         std::span<const std::uint8_t> input, std::string* error = nullptr);
+    [[nodiscard]] bool atomic_rmw(std::uint64_t address, std::size_t size,
+        std::uint64_t operand, AtomicOperation operation,
+        std::uint64_t& previous_value, std::string* error = nullptr);
 
     // Exclusive accesses use a documented 16-byte reservation granule.
     // Mapping, data, and reservation operations are synchronized for

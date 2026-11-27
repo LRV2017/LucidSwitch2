@@ -1,5 +1,6 @@
 #include "lucid/core/memory_bus.hpp"
 #include <algorithm>
+#include <bit>
 #include <limits>
 #include <new>
 #include <stdexcept>
@@ -181,6 +182,78 @@ bool MemoryBus::write(std::uint64_t address, std::span<const std::uint8_t> input
             ++region->exclusive_versions[index];
     }
     bump_generation(*region);
+    return true;
+}
+
+bool MemoryBus::atomic_rmw(const std::uint64_t address,
+    const std::size_t size, const std::uint64_t operand,
+    const AtomicOperation operation, std::uint64_t& previous_value,
+    std::string* error) {
+    previous_value=0U;
+    if((size!=1U&&size!=2U&&size!=4U&&size!=8U)||(address%size)!=0U){
+        set_error(error,"Atomic read-modify-write requires an aligned 1, 2, 4, or 8-byte operand.");
+        return false;
+    }
+    std::unique_lock lock(mutex_);
+    Region* region=find_region(address);
+    if(region==nullptr||
+       !has_permission(region->permissions,MemoryPermission::Read)||
+       !has_permission(region->permissions,MemoryPermission::Write)){
+        set_error(error,"The atomic address is unmapped or lacks read/write permission.");
+        return false;
+    }
+    const std::size_t offset=static_cast<std::size_t>(address-region->base);
+    if(offset>region->bytes.size()||size>region->bytes.size()-offset){
+        set_error(error,"The atomic operand crosses the end of a mapped region.");
+        return false;
+    }
+    std::uint64_t old_value=0U;
+    for(std::size_t byte=0U;byte<size;++byte)
+        old_value|=static_cast<std::uint64_t>(region->bytes[offset+byte])<<(byte*8U);
+    const std::uint64_t mask=size==8U
+        ? std::numeric_limits<std::uint64_t>::max()
+        : ((std::uint64_t{1}<<(size*8U))-1U);
+    old_value&=mask;
+    const std::uint64_t source=operand&mask;
+    std::uint64_t new_value=old_value;
+    switch(operation){
+    case AtomicOperation::Add:new_value=(old_value+source)&mask;break;
+    case AtomicOperation::Clear:new_value=old_value&~source;break;
+    case AtomicOperation::Eor:new_value=old_value^source;break;
+    case AtomicOperation::Set:new_value=old_value|source;break;
+    case AtomicOperation::UnsignedMax:new_value=std::max(old_value,source);break;
+    case AtomicOperation::UnsignedMin:new_value=std::min(old_value,source);break;
+    case AtomicOperation::Swap:new_value=source;break;
+    case AtomicOperation::SignedMax:
+    case AtomicOperation::SignedMin:{
+        const auto signed_value=[size](const std::uint64_t value) noexcept {
+            if(size==8U)return std::bit_cast<std::int64_t>(value);
+            const unsigned bits=static_cast<unsigned>(size*8U);
+            const std::uint64_t sign=std::uint64_t{1}<<(bits-1U);
+            const std::uint64_t narrow_mask=(std::uint64_t{1}<<bits)-1U;
+            std::uint64_t extended=value&narrow_mask;
+            if((extended&sign)!=0U)extended|=~narrow_mask;
+            return std::bit_cast<std::int64_t>(extended);
+        };
+        const std::int64_t old_signed=signed_value(old_value);
+        const std::int64_t source_signed=signed_value(source);
+        const bool choose_old=operation==AtomicOperation::SignedMax
+            ? old_signed>=source_signed : old_signed<=source_signed;
+        new_value=choose_old?old_value:source;
+        break;
+    }
+    }
+    for(std::size_t byte=0U;byte<size;++byte)
+        region->bytes[offset+byte]=static_cast<std::uint8_t>(
+            (new_value>>(byte*8U))&0xFFU);
+    const std::size_t first_granule=offset/ExclusiveGranuleBytes;
+    const std::size_t last_granule=(offset+size-1U)/ExclusiveGranuleBytes;
+    for(std::size_t index=first_granule;index<=last_granule;++index){
+        ++region->exclusive_versions[index];
+        if(region->exclusive_versions[index]==0U)++region->exclusive_versions[index];
+    }
+    bump_generation(*region);
+    previous_value=old_value;
     return true;
 }
 
