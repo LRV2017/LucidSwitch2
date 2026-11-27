@@ -1,5 +1,7 @@
 #include "lucid/kernel/runtime.hpp"
 
+#include <algorithm>
+
 #include <limits>
 #include <utility>
 
